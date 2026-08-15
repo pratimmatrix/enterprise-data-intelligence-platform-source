@@ -17,13 +17,29 @@ class BusinessRuleEngine:
     def evaluate(self, prediction_result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate probability and assign priority + actionable strategy.
+        Supports both decimal (0.0 - 1.0) and percentage (0 - 100) probability inputs.
         """
-        prob = float(prediction_result.get("probability", 0.0))
+        # Safely extract probability from multiple possible keys
+        raw_prob = (
+            prediction_result.get("probability")
+            if prediction_result.get("probability") is not None
+            else prediction_result.get("probability_percent", 0.0)
+        )
 
-        if prob >= 0.70:
+        try:
+            prob = float(raw_prob)
+        except (ValueError, TypeError):
+            prob = 0.0
+
+        # Auto-normalize percentage scale (0-100) to decimal (0.0-1.0)
+        if prob > 1.0:
+            prob = prob / 100.0
+
+        # Business priority thresholds
+        if prob >= 0.60:
             priority = "HIGH"
             action = "Prioritize customer for immediate direct-channel relationship manager follow-up."
-        elif prob >= 0.40:
+        elif prob >= 0.30:
             priority = "MEDIUM"
             action = "Include customer in nurture email sequence and standard marketing campaign."
         else:
