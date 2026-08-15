@@ -9,6 +9,7 @@ and placeholder values that may have special meaning
 in a dataset.
 """
 
+from typing import Dict, Any
 import pandas as pd
 
 
@@ -17,7 +18,10 @@ class SemanticAnalyzer:
     Analyze columns for meaningful sentinel and placeholder values.
     """
 
-    def analyze(self, df: pd.DataFrame) -> dict:
+    def __init__(self):
+        print("SemanticAnalyzer initialized.")
+
+    def analyze(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Detect common semantic values in the dataset.
 
@@ -31,6 +35,8 @@ class SemanticAnalyzer:
         dict
             Semantic analysis results.
         """
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return {}
 
         results = {}
 
@@ -43,6 +49,7 @@ class SemanticAnalyzer:
             "na",
             "none",
             "null",
+            "?",
         }
 
         for column in df.columns:
@@ -58,10 +65,11 @@ class SemanticAnalyzer:
             # TEXT PLACEHOLDERS
             # ==========================================
 
-            if pd.api.types.is_object_dtype(series):
+            if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series):
 
                 normalized = (
                     series
+                    .dropna()
                     .astype(str)
                     .str.strip()
                     .str.lower()
@@ -84,21 +92,23 @@ class SemanticAnalyzer:
 
             if pd.api.types.is_numeric_dtype(series):
 
-                value_counts = series.value_counts()
+                clean_series = series.dropna()
+                value_counts = clean_series.value_counts()
+                total_len = len(clean_series)
 
                 for value, count in value_counts.items():
 
-                    # Negative sentinel values
+                    # Negative sentinel values (e.g. -1 in pdays)
                     if value < 0:
 
                         column_results[
                             "sentinel_values"
                         ][str(value)] = int(count)
 
-                    # Zero can be meaningful in some columns
-                    elif value == 0:
+                    # High density of 0 (can be a default / flag)
+                    elif value == 0 and total_len > 0:
 
-                        zero_ratio = count / len(series)
+                        zero_ratio = count / total_len
 
                         if zero_ratio > 0.05:
 
@@ -106,11 +116,17 @@ class SemanticAnalyzer:
                                 "sentinel_values"
                             ][str(value)] = int(count)
 
+                    # 999 / 9999 common sentinel codes
+                    elif value in {999, 9999}:
+                        column_results[
+                            "sentinel_values"
+                        ][str(value)] = int(count)
+
             results[column] = column_results
 
         return results
 
-    def display(self, results: dict):
+    def display(self, results: Dict[str, Any]):
         """
         Display semantic intelligence results.
         """
@@ -121,8 +137,8 @@ class SemanticAnalyzer:
 
         for column, info in results.items():
 
-            placeholders = info["placeholder_values"]
-            sentinels = info["sentinel_values"]
+            placeholders = info.get("placeholder_values", {})
+            sentinels = info.get("sentinel_values", {})
 
             if not placeholders and not sentinels:
                 continue
@@ -136,7 +152,7 @@ class SemanticAnalyzer:
                 for value, count in placeholders.items():
 
                     print(
-                        f"    {value} → {count} records"
+                        f"    {value} -> {count} records"
                     )
 
             if sentinels:
@@ -146,7 +162,15 @@ class SemanticAnalyzer:
                 for value, count in sentinels.items():
 
                     print(
-                        f"    {value} → {count} records"
+                        f"    {value} -> {count} records"
                     )
 
             print()
+
+    def run(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Pipeline runner alias.
+        """
+        results = self.analyze(df)
+        self.display(results)
+        return results
