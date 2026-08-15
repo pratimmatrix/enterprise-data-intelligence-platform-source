@@ -11,25 +11,54 @@ and target contracts before retraining or schema mutation is allowed.
 from typing import Dict, Any, List, Optional
 import pandas as pd
 
-try:
-    from src.validation.target_integrity import TargetIntegrityEngine, TargetIntegrityError
-except ImportError:
-    try:
-        from src.feature_validation.target_integrity import TargetIntegrityEngine, TargetIntegrityError
-    except ImportError:
-        # Fallback inline stub if module path moves
-        class TargetIntegrityError(Exception):
-            pass
 
-        class TargetIntegrityEngine:
-            def __init__(self, target_column="y"):
-                self.target_column = target_column
+# ============================================================
+# TARGET INTEGRITY CONTRACT (SELF-CONTAINED TO PREVENT IMPORT ERRORS)
+# ============================================================
 
-            def validate_target(self, df):
-                if self.target_column not in df.columns:
-                    raise TargetIntegrityError(f"Target column '{self.target_column}' is missing.")
-                return {"valid": True, "target": self.target_column}
+class TargetIntegrityError(Exception):
+    """Raised when target column fails defensive contract."""
+    pass
 
+
+class TargetIntegrityEngine:
+    """
+    Validates existence, distribution, and validity of target column.
+    """
+
+    def __init__(self, target_column: str = "y"):
+        self.target_column = target_column
+
+    def validate_target(self, df: pd.DataFrame) -> Dict[str, Any]:
+        if self.target_column not in df.columns:
+            raise TargetIntegrityError(
+                f"Mandatory target column '{self.target_column}' is missing from candidate dataset."
+            )
+
+        unique_targets = df[self.target_column].dropna().unique()
+        
+        # Check non-empty target
+        if len(unique_targets) == 0:
+            raise TargetIntegrityError(
+                f"Target column '{self.target_column}' contains only null values."
+            )
+
+        # Check binary classification validity
+        if len(unique_targets) < 2:
+            raise TargetIntegrityError(
+                f"Target column '{self.target_column}' must have at least 2 distinct classes. Found: {unique_targets}"
+            )
+
+        return {
+            "valid": True,
+            "target_column": self.target_column,
+            "classes": [str(c) for c in unique_targets]
+        }
+
+
+# ============================================================
+# GATEKEEPER DECISION ENUM
+# ============================================================
 
 class GatekeeperDecision:
 
@@ -37,6 +66,10 @@ class GatekeeperDecision:
     WARNING = "WARNING"
     REJECT = "REJECT"
 
+
+# ============================================================
+# DATASET GATEKEEPER
+# ============================================================
 
 class DatasetGatekeeper:
     """
