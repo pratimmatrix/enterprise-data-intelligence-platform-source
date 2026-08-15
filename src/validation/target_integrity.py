@@ -8,7 +8,7 @@ Validates target existence, data types, binary class structure,
 missing values, and prevents silent target degradation during adaptive retraining.
 """
 
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional, Union
 import pandas as pd
 import numpy as np
 
@@ -48,12 +48,16 @@ class TargetIntegrityEngine:
         if self.target_column not in df.columns:
             raise TargetIntegrityError(
                 f"Target column '{self.target_column}' is missing. "
-                f"Supervised retraining cannot proceed without protected target 'y'."
+                f"Supervised retraining cannot proceed without protected target '{self.target_column}'."
             )
 
         target_series = df[self.target_column]
 
-        # 2. Check for missing values in target
+        # 2. Check for empty series
+        if len(target_series) == 0:
+            raise TargetIntegrityError("Dataset contains 0 rows. Target evaluation aborted.")
+
+        # 3. Check for missing values in target
         null_count = int(target_series.isnull().sum())
         if null_count > 0:
             raise TargetIntegrityError(
@@ -61,12 +65,13 @@ class TargetIntegrityEngine:
                 "Target column must be 100% complete."
             )
 
-        # 3. Check for empty series
-        if len(target_series) == 0:
-            raise TargetIntegrityError("Dataset contains 0 rows. Target evaluation aborted.")
-
-        # 4. Normalize and validate class values
+        # 4. Normalize and validate class values (supports numeric 0/1 or string no/yes)
         normalized_series = target_series.astype(str).str.strip().str.lower()
+        
+        # Handle 0 / 1 representation gracefully
+        class_mapping = {"0": "no", "1": "yes", "0.0": "no", "1.0": "yes", "false": "no", "true": "yes"}
+        normalized_series = normalized_series.replace(class_mapping)
+
         unique_classes = set(normalized_series.unique())
 
         invalid_classes = unique_classes - self.allowed_classes
@@ -104,13 +109,31 @@ class TargetIntegrityEngine:
         self.validate_target(df)
 
         X = df.drop(columns=[self.target_column]).copy()
-        y = (
+        
+        normalized_target = (
             df[self.target_column]
             .astype(str)
             .str.strip()
             .str.lower()
-            .map({"no": 0, "yes": 1})
-            .astype(np.int32)
         )
+        
+        class_mapping = {
+            "no": 0, "0": 0, "0.0": 0, "false": 0,
+            "yes": 1, "1": 1, "1.0": 1, "true": 1
+        }
+        
+        y = normalized_target.map(class_mapping).astype(np.int32)
 
         return X, y
+
+    def run(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Pipeline runner alias.
+        """
+        return self.validate_target(df)
+
+    def validate(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Validation alias.
+        """
+        return self.validate_target(df)
