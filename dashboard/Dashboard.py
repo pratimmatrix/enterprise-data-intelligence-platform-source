@@ -43,15 +43,22 @@ st.set_page_config(
 )
 
 # ============================================================
-# MODEL PATH & METRICS
+# MODEL PATH & RESOLUTION (PORTABLE & RESILIENT)
 # ============================================================
 
-MODEL_PATH = (
-    Path.home()
-    / "Documents"
-    / "models"
-    / "random_forest_pipeline.pkl"
-)
+def resolve_model_path():
+    candidate_paths = [
+        Path.home() / "Documents" / "models" / "random_forest_pipeline.pkl",
+        PROJECT_ROOT / "models" / "random_forest_pipeline.pkl",
+        PROJECT_ROOT / "models" / "champion_model.pkl",
+        Path.home() / "Documents" / "models" / "champion_model.pkl"
+    ]
+    for p in candidate_paths:
+        if p.exists():
+            return p
+    return candidate_paths[0]
+
+MODEL_PATH = resolve_model_path()
 
 MODEL_NAME = "Random Forest Classifier"
 PIPELINE_NAME = "Preprocessor + Random Forest"
@@ -133,9 +140,13 @@ def create_engineered_features(customer):
 
 
 def load_model():
-    if not MODEL_PATH.exists():
+    current_path = resolve_model_path()
+    if not current_path.exists():
         return None
-    return joblib.load(MODEL_PATH)
+    try:
+        return joblib.load(current_path)
+    except Exception:
+        return None
 
 
 def get_top_features():
