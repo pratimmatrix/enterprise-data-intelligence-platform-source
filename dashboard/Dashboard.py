@@ -75,6 +75,26 @@ with st.sidebar:
                     st.error("Invalid credentials.")
     else:
         st.success("🔓 Authenticated as Administrator")
+        
+        # System Reset Action
+        st.markdown("---")
+        st.subheader("⚙️ System Governance")
+        if st.button("🔄 Reset to Original Baseline", help="Instantly restore baseline models and active schema"):
+            try:
+                # Re-register original baseline
+                baseline_path = PROJECT_ROOT / "bank-full.csv"
+                if baseline_path.exists():
+                    df_base = pd.read_csv(baseline_path, sep=";")
+                    reg = SchemaRegistry()
+                    reg.register_schema(df_base, version_tag="v1.0", notes="Original Verified Baseline")
+                    trainer = AdaptiveModelTrainer()
+                    trainer.train_and_evaluate(df_base)
+                    st.session_state.predictor = ModelPredictor()
+                    st.success("Platform restored to pristine baseline state!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Reset Error: {str(e)}")
+
         if st.button("Log Out"):
             st.session_state.is_authenticated = False
             st.rerun()
