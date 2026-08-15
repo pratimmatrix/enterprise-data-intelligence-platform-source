@@ -1,45 +1,79 @@
 """
-Business Insight Engine
+Insight Engine
+Enterprise Customer Intelligence Platform
 
 Author: Pratim Mistry
-Description:
-Generates natural-language customer profiling and campaign targeting recommendations.
+Generates operational & behavioral insights for marketing campaigns.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 class InsightEngine:
     """
-    Extracts actionable marketing insights from prediction and customer attributes.
+    Generates actionable business insights based on customer features 
+    and model decision outputs.
     """
 
-    def generate_insights(self, customer_data: Dict[str, Any], decision_result: Dict[str, Any]) -> List[str]:
+    def generate_insights(
+        self,
+        customer_data: Dict[str, Any],
+        decision_result: Optional[Dict[str, Any]] = None
+    ) -> List[str]:
+        """
+        Produce qualitative customer outreach directives.
+        Supports both 1-argument and 2-argument call signatures.
+        """
         insights = []
-        pred = decision_result.get("prediction", "NO")
-        prob = float(decision_result.get("probability_percent", 0.0))
 
-        if pred == "YES":
-            insights.append(f"Customer exhibits strong conversion affinity ({prob}% probability).")
-        else:
-            insights.append(f"Customer exhibits low propensity to subscribe ({prob}% probability).")
-
-        # Contact history heuristics
-        poutcome = customer_data.get("poutcome", "unknown")
-        if poutcome == "success":
-            insights.append("Prior campaign historical outcome was successful — high repeat response likelihood.")
-        elif poutcome == "failure":
-            insights.append("Previous campaign contact failed — consider tailored incentive packaging.")
-
-        # Balance & engagement heuristics
-        balance = float(customer_data.get("balance", 0))
-        if balance > 5000:
-            insights.append(f"High-balance customer (Balance: {balance:,.2f}) — prime candidate for premium term deposit products.")
-        elif balance <= 0:
-            insights.append("Customer maintains zero or negative account balance — financial risk constraint.")
-
-        duration = float(customer_data.get("duration", 0))
+        # 1. Contact Duration Insight
+        duration = customer_data.get("duration", 0)
         if duration > 300:
-            insights.append(f"High historical call duration ({duration}s) signals high customer interest.")
+            insights.append(
+                f"High customer engagement: Call duration was {duration} seconds (above benchmark)."
+            )
+        elif duration < 100 and duration > 0:
+            insights.append(
+                "Short engagement window: Consider refining the outreach script for faster value proposition."
+            )
+
+        # 2. Financial Standing Insight
+        balance = customer_data.get("balance", 0)
+        housing = str(customer_data.get("housing", "no")).lower()
+        loan = str(customer_data.get("loan", "no")).lower()
+
+        if balance > 3000:
+            insights.append(
+                f"Strong financial profile: Account balance (${balance:,.2f}) indicates high term-deposit capacity."
+            )
+        elif balance < 0:
+            insights.append(
+                "Negative account balance detected: Target with low-risk advisory rather than investment products."
+            )
+
+        if housing == "yes" and loan == "yes":
+            insights.append(
+                "High debt commitment: Customer holds both housing and personal loans."
+            )
+
+        # 3. Campaign & Historical Touchpoint Insight
+        previous_success = customer_data.get("previous_success", 0)
+        poutcome = str(customer_data.get("poutcome", "unknown")).lower()
+        if previous_success == 1 or poutcome == "success":
+            insights.append(
+                "High-affinity prospect: Prior campaign resulted in positive conversion."
+            )
+
+        campaign = customer_data.get("campaign", 1)
+        if campaign > 3:
+            insights.append(
+                f"Diminishing returns warning: Customer contacted {campaign} times in the current campaign."
+            )
+
+        # 4. Fallback Default
+        if not insights:
+            insights.append(
+                "Standard profile: Align outreach with primary banking advisory guidelines."
+            )
 
         return insights
