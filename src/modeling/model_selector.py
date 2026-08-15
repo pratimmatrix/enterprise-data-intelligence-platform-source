@@ -1,5 +1,15 @@
-import logging
+"""
+Model Selector Engine
+Enterprise Customer Intelligence Platform
 
+Author: Pratim Mistry
+Description:
+Applies business-driven objective strategies (F1, Precision, Recall, ROC-AUC) 
+and operational constraint filters to select the production candidate model.
+"""
+
+import logging
+from typing import Optional, Dict, Any
 import pandas as pd
 
 
@@ -10,24 +20,24 @@ class ModelSelector:
 
     def __init__(
         self,
-        strategy="f1",
-        minimum_recall=None
+        strategy: str = "f1",
+        minimum_recall: Optional[float] = None
     ):
         """
         Select the final ML model based on business strategy.
 
         Strategies:
-            - "f1"       : Select highest F1 score
-            - "recall"   : Select highest recall
+            - "f1"        : Select highest F1 score
+            - "recall"    : Select highest recall
             - "precision" : Select highest precision
-            - "roc_auc"  : Select highest ROC-AUC
+            - "roc_auc"   : Select highest ROC-AUC
 
         minimum_recall:
             Optional minimum recall requirement.
             Models below this threshold are excluded.
         """
 
-        self.strategy = strategy
+        self.strategy = strategy.strip().lower()
         self.minimum_recall = minimum_recall
 
         self.selected_model = None
@@ -39,7 +49,7 @@ class ModelSelector:
     # VALIDATE INPUT
     # ============================================================
 
-    def _validate_results(self, results):
+    def _validate_results(self, results: pd.DataFrame):
 
         if results is None:
             raise ValueError(
@@ -81,7 +91,7 @@ class ModelSelector:
     # SELECT MODEL
     # ============================================================
 
-    def select(self, results):
+    def select(self, results: pd.DataFrame) -> str:
 
         print()
         print("=" * 70)
@@ -126,10 +136,13 @@ class ModelSelector:
             "f1": "f1",
             "recall": "recall",
             "precision": "precision",
-            "roc_auc": "roc_auc"
+            "roc_auc": "roc_auc",
+            "accuracy": "accuracy"
         }
 
-        if self.strategy not in strategy_columns:
+        strat_key = self.strategy.lower()
+
+        if strat_key not in strategy_columns:
 
             raise ValueError(
                 f"Unsupported selection strategy: "
@@ -138,15 +151,18 @@ class ModelSelector:
                 f"{list(strategy_columns.keys())}"
             )
 
-        metric = strategy_columns[
-            self.strategy
-        ]
+        metric = strategy_columns[strat_key]
+
+        # Sort by target metric with ROC-AUC as tie-breaker
+        sort_metrics = [metric]
+        if metric != "roc_auc":
+            sort_metrics.append("roc_auc")
 
         selected_row = (
             candidates
             .sort_values(
-                by=metric,
-                ascending=False
+                by=sort_metrics,
+                ascending=[False] * len(sort_metrics)
             )
             .iloc[0]
         )
@@ -187,7 +203,8 @@ class ModelSelector:
             candidates[
                 display_columns
             ].to_string(
-                index=False
+                index=False,
+                float_format=lambda value: f"{value:.4f}"
             )
         )
 
@@ -237,7 +254,7 @@ class ModelSelector:
     # GET SELECTION DETAILS
     # ============================================================
 
-    def get_selection_details(self):
+    def get_selection_details(self) -> Dict[str, Any]:
 
         if self.selection_results is None:
 
