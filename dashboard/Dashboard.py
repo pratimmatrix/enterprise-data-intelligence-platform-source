@@ -1,6 +1,6 @@
 """
 Adaptive Enterprise Data Intelligence Platform
-Streamlit Dual-Access Decision & Retraining Dashboard
+Unified Enterprise Customer Intelligence Dashboard
 
 Author: Pratim Mistry
 """
@@ -8,6 +8,7 @@ Author: Pratim Mistry
 import sys
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import streamlit as st
 
 # ============================================================
@@ -28,15 +29,32 @@ from src.training.adaptive_trainer import AdaptiveModelTrainer
 from src.training.quality_gate import QualityGateEngine, QualityGateDecision
 
 # ============================================================
-# STREAMLIT PAGE CONFIGURATION
+# PAGE CONFIGURATION & STYLING
 # ============================================================
 st.set_page_config(
-    page_title="Adaptive Enterprise Data Platform",
-    page_icon="🧠",
-    layout="wide"
+    page_title="Enterprise Customer Intelligence Platform",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize singletons
+# Custom CSS for polished enterprise UI
+st.markdown("""
+<style>
+    .metric-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #1E88E5;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    .status-high { color: #D32F2F; font-weight: bold; }
+    .status-med { color: #F57C00; font-weight: bold; }
+    .status-low { color: #388E3C; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
+
+# Initialize Session Singletons
 if "predictor" not in st.session_state:
     st.session_state.predictor = ModelPredictor()
 if "business_rules" not in st.session_state:
@@ -47,41 +65,39 @@ if "is_authenticated" not in st.session_state:
     st.session_state.is_authenticated = False
 
 # ============================================================
-# SIDEBAR: NAVIGATION & AUTHENTICATION
+# SIDEBAR NAVIGATION & ADMIN CONTROLS
 # ============================================================
 with st.sidebar:
-    st.title("🛡️ Platform Control")
+    st.title("🏦 Platform Portal")
+    st.caption("Enterprise AI & Customer Decision Engine")
     st.markdown("---")
     
     app_mode = st.radio(
-        "Select Operation Mode",
-        ["🎯 Public Decision Studio", "⚡ Authorized Retraining & Schema Studio"]
+        "Navigation Menu",
+        ["🎯 Customer Decision Studio", "⚡ Model Management & Adaptive Retraining"]
     )
     
     st.markdown("---")
     if not st.session_state.is_authenticated:
-        st.subheader("🔐 Admin Access")
+        st.subheader("🔐 Admin Authentication")
         with st.form("admin_login_form"):
-            username = st.text_input("Username")
+            username = st.text_input("Admin ID")
             password = st.text_input("Password", type="password")
-            login_btn = st.form_submit_button("Authenticate")
+            login_btn = st.form_submit_button("Log In")
             
             if login_btn:
                 if AuthManager.verify_credentials(username, password):
                     st.session_state.is_authenticated = True
-                    st.success("Authentication successful!")
+                    st.success("Admin authorized!")
                     st.rerun()
                 else:
-                    st.error("Invalid credentials.")
+                    st.error("Invalid ID / Password.")
     else:
         st.success("🔓 Authenticated as Administrator")
-        
-        # System Reset Action
         st.markdown("---")
-        st.subheader("⚙️ System Governance")
-        if st.button("🔄 Reset to Original Baseline", help="Instantly restore baseline models and active schema"):
+        st.subheader("⚙️ System Recovery")
+        if st.button("🔄 Reset Baseline Model", help="Revert champion model back to pristine baseline"):
             try:
-                # Re-register original baseline
                 baseline_path = PROJECT_ROOT / "bank-full.csv"
                 if baseline_path.exists():
                     df_base = pd.read_csv(baseline_path, sep=";")
@@ -90,59 +106,60 @@ with st.sidebar:
                     trainer = AdaptiveModelTrainer()
                     trainer.train_and_evaluate(df_base)
                     st.session_state.predictor = ModelPredictor()
-                    st.success("Platform restored to pristine baseline state!")
+                    st.success("Platform restored to default production baseline!")
                     st.rerun()
             except Exception as e:
-                st.error(f"Reset Error: {str(e)}")
+                st.error(f"Reset failed: {str(e)}")
 
         if st.button("Log Out"):
             st.session_state.is_authenticated = False
             st.rerun()
 
 # ============================================================
-# VIEW 1: PUBLIC DECISION STUDIO
+# VIEW 1: COMPLETE CUSTOMER DECISION STUDIO
 # ============================================================
-if app_mode == "🎯 Public Decision Studio":
-    st.title("🎯 Enterprise Customer Decision Studio")
-    st.caption("Real-Time Machine Learning Inference & Heuristic Business Optimization")
+if app_mode == "🎯 Customer Decision Studio":
+    st.title("🎯 Customer Conversion Intelligence Studio")
+    st.markdown("Real-time predictive scoring, behavioral insights, and automated marketing directives.")
     st.markdown("---")
 
-    col1, col2, col3 = st.columns(3)
+    with st.expander("📝 Enter Customer Profile & Campaign Outreach Details", expanded=True):
+        col1, col2, col3 = st.columns(3)
 
-    with col1:
-        st.subheader("👤 Demographics")
-        age = st.number_input("Age", min_value=18, max_value=100, value=35)
-        job = st.selectbox("Job Type", [
-            "admin.", "blue-collar", "entrepreneur", "housemaid", "management",
-            "retired", "self-employed", "services", "student", "technician",
-            "unemployed", "unknown"
-        ], index=4)
-        marital = st.selectbox("Marital Status", ["married", "single", "divorced"], index=0)
-        education = st.selectbox("Education Level", ["primary", "secondary", "tertiary", "unknown"], index=2)
+        with col1:
+            st.markdown("#### 👤 Demographics")
+            age = st.number_input("Age", min_value=18, max_value=100, value=38)
+            job = st.selectbox("Job Category", [
+                "management", "technician", "entrepreneur", "blue-collar", "admin.",
+                "services", "retired", "self-employed", "unemployed", "student",
+                "housemaid", "unknown"
+            ], index=0)
+            marital = st.selectbox("Marital Status", ["married", "single", "divorced"], index=0)
+            education = st.selectbox("Education Level", ["tertiary", "secondary", "primary", "unknown"], index=0)
 
-    with col2:
-        st.subheader("💳 Financial Health")
-        default = st.selectbox("Credit Default History", ["no", "yes"], index=0)
-        balance = st.number_input("Account Balance ($)", value=1500, step=100)
-        housing = st.selectbox("Housing Loan", ["yes", "no"], index=0)
-        loan = st.selectbox("Personal Loan", ["no", "yes"], index=0)
+        with col2:
+            st.markdown("#### 💳 Financial Profile")
+            default = st.selectbox("Has Credit Default?", ["no", "yes"], index=0)
+            balance = st.number_input("Average Yearly Balance ($)", value=2500, step=100)
+            housing = st.selectbox("Has Housing Loan?", ["yes", "no"], index=0)
+            loan = st.selectbox("Has Personal Loan?", ["no", "yes"], index=0)
 
-    with col3:
-        st.subheader("📞 Campaign Outreach")
-        contact = st.selectbox("Contact Communication Channel", ["cellular", "telephone", "unknown"], index=0)
-        month = st.selectbox("Last Contact Month", [
-            "jan", "feb", "mar", "apr", "may", "jun",
-            "jul", "aug", "sep", "oct", "nov", "dec"
-        ], index=4)
-        day = st.slider("Last Contact Day", 1, 31, 15)
-        duration = st.number_input("Call Duration (seconds)", min_value=0, value=300, step=10)
-        campaign = st.number_input("Current Campaign Contacts", min_value=1, value=2, step=1)
-        pdays = st.number_input("Days Since Prior Campaign (-1 = Never)", min_value=-1, value=-1, step=1)
-        previous = st.number_input("Previous Contact Count", min_value=0, value=0, step=1)
-        poutcome = st.selectbox("Previous Campaign Outcome", ["unknown", "failure", "other", "success"], index=0)
+        with col3:
+            st.markdown("#### 📞 Campaign Outreach")
+            contact = st.selectbox("Communication Type", ["cellular", "telephone", "unknown"], index=0)
+            month = st.selectbox("Last Contact Month", [
+                "may", "jul", "aug", "jun", "nov", "apr", "feb", "jan", "oct", "sep", "mar", "dec"
+            ], index=0)
+            day = st.slider("Last Contact Day of Month", 1, 31, 18)
+            duration = st.number_input("Last Call Duration (seconds)", min_value=0, value=350, step=10)
+            campaign = st.number_input("Contacts in Current Campaign", min_value=1, value=1, step=1)
+            pdays = st.number_input("Days Since Prior Campaign (-1 = Never)", min_value=-1, value=-1, step=1)
+            previous = st.number_input("Number of Contacts Before This Campaign", min_value=0, value=0, step=1)
+            poutcome = st.selectbox("Previous Campaign Outcome", ["unknown", "success", "failure", "other"], index=0)
 
     st.markdown("---")
-    if st.button("🚀 Evaluate Customer Conversion Probability", use_container_width=True):
+    
+    if st.button("🚀 Run Conversion & Intelligence Prediction", use_container_width=True):
         customer_payload = {
             "age": age, "job": job, "marital": marital, "education": education,
             "default": default, "balance": balance, "housing": housing, "loan": loan,
@@ -155,38 +172,75 @@ if app_mode == "🎯 Public Decision Studio":
             business_output = st.session_state.business_rules.evaluate(prediction_output)
             insights = st.session_state.insight_engine.generate_insights(customer_payload, business_output)
 
-            res_col1, res_col2, res_col3, res_col4 = st.columns(4)
-            with res_col1:
-                st.metric("Conversion Prediction", prediction_output["prediction"])
-            with res_col2:
-                st.metric("Conversion Probability", f"{prediction_output['probability_percent']}%")
-            with res_col3:
-                st.metric("Risk Priority", business_output["priority"])
-            with res_col4:
-                st.metric("Target Confidence", prediction_output["risk_category"])
+            prob_pct = prediction_output["probability_percent"]
+            pred_label = prediction_output["prediction"]
+            priority = business_output["priority"]
+            risk_cat = prediction_output["risk_category"]
 
-            st.markdown("### 💼 Operational Directive")
-            st.info(business_output["recommended_action"])
+            st.markdown("### 📊 Prediction & Decision Dashboard")
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
-            st.markdown("### 💡 Marketing & Strategic Insights")
-            for ins in insights:
-                st.markdown(f"• {ins}")
+            with kpi1:
+                st.metric(
+                    label="Term Deposit Subscription",
+                    value=f"{'✅ YES' if pred_label == 'YES' else '❌ NO'}",
+                    delta=f"{prob_pct}% Propensity"
+                )
+            with kpi2:
+                st.metric(
+                    label="Conversion Probability",
+                    value=f"{prob_pct:.1f}%",
+                    delta="Calculated Likelihood"
+                )
+            with kpi3:
+                st.metric(
+                    label="Outreach Priority",
+                    value=priority,
+                    delta=f"Risk: {risk_cat}"
+                )
+            with kpi4:
+                st.metric(
+                    label="Expected Value Segment",
+                    value=f"{'High Tier' if balance > 5000 else 'Standard Tier'}"
+                )
+
+            # Progress Bar for conversion probability
+            st.markdown("#### Propensity Distribution")
+            st.progress(min(max(float(prob_pct) / 100.0, 0.0), 1.0))
+
+            # Operational Strategy & Directives
+            st.markdown("---")
+            d_col1, d_col2 = st.columns(2)
+
+            with d_col1:
+                st.markdown("### 💼 Operational Directive & Next Best Action")
+                if priority == "HIGH":
+                    st.success(f"**Action Recommended:** {business_output['recommended_action']}")
+                elif priority == "MEDIUM":
+                    st.warning(f"**Action Recommended:** {business_output['recommended_action']}")
+                else:
+                    st.info(f"**Action Recommended:** {business_output['recommended_action']}")
+
+            with d_col2:
+                st.markdown("### 💡 Behavioral & Marketing Insights")
+                for item in insights:
+                    st.markdown(f"• {item}")
 
         except Exception as e:
-            st.error(f"Inference Engine Error: {str(e)}")
+            st.error(f"Prediction Pipeline Error: {str(e)}")
 
 # ============================================================
 # VIEW 2: AUTHORIZED RETRAINING & SCHEMA STUDIO
 # ============================================================
-elif app_mode == "⚡ Authorized Retraining & Schema Studio":
+elif app_mode == "⚡ Model Management & Adaptive Retraining":
     st.title("⚡ Dynamic Schema Evolution & Retraining Studio")
-    st.caption("Defensive Dataset Ingestion, Dynamic Schema Adaptation, and Automated Quality Gates")
+    st.markdown("Manage models, upload updated datasets, and monitor dynamic schema adaptations.")
     st.markdown("---")
 
     if not st.session_state.is_authenticated:
-        st.warning("⚠️ Access Restricted. Please authenticate via the admin panel on the sidebar.")
+        st.warning("⚠️ Access Restricted. Please log in through the Admin panel on the sidebar.")
     else:
-        # 1. Download Baseline Dataset
+        # Step A: Download Baseline CSV
         data_path = PROJECT_ROOT / "bank-full.csv"
         if data_path.exists():
             with open(data_path, "rb") as f:
@@ -198,7 +252,7 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                 )
         
         st.markdown("---")
-        st.subheader("📤 Upload Candidate Dataset for Ingestion & Retraining")
+        st.subheader("📤 Upload Candidate Dataset for Defensive Validation & Retraining")
         uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
         if uploaded_file is not None:
@@ -208,7 +262,7 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                     uploaded_file.seek(0)
                     candidate_df = pd.read_csv(uploaded_file, sep=",")
 
-                st.success(f"Candidate dataset parsed successfully! Shape: {candidate_df.shape}")
+                st.success(f"Candidate dataset parsed successfully! Total Shape: {candidate_df.shape}")
 
                 # Defensive Gatekeeper Evaluation
                 gatekeeper = DatasetGatekeeper()
@@ -223,7 +277,7 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                     st.success("✅ Dataset ACCEPTED for Retraining Pipeline.")
                     st.json(gate_report)
 
-                    # Step 2: Schema Evolution
+                    # Schema Diff Analysis
                     st.markdown("### 🔄 Step 2: Schema Evolution & Diff Analysis")
                     registry = SchemaRegistry()
                     comparator = SchemaComparator(registry)
@@ -235,9 +289,9 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                     with d_col2:
                         st.write("**Deleted Features:**", diff["deleted_features"] if diff["deleted_features"] else "None")
 
-                    # Step 3: Trigger Automated Retraining
+                    # Adaptive Retraining Trigger
                     st.markdown("---")
-                    if st.button("⚡ Execute Adaptive Retraining & Champion Evaluation", use_container_width=True):
+                    if st.button("⚡ Execute Adaptive Retraining & Quality Gate", use_container_width=True):
                         with st.spinner("Retraining candidate model suite dynamically..."):
                             trainer = AdaptiveModelTrainer()
                             training_output = trainer.train_and_evaluate(candidate_df)
@@ -249,7 +303,7 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                             candidates_df = pd.DataFrame(training_output["all_candidates"]).T[["roc_auc", "f1", "recall", "precision", "accuracy"]]
                             st.dataframe(candidates_df, use_container_width=True)
 
-                            # Step 4: Quality Gate Check
+                            # Quality Gate Governance
                             st.markdown("### 🛡️ Quality Gate Governance Verdict")
                             quality_gate = QualityGateEngine()
                             gate_verdict = quality_gate.evaluate_candidate(best_candidate, best_metrics)
@@ -258,7 +312,7 @@ elif app_mode == "⚡ Authorized Retraining & Schema Studio":
                                 st.balloons()
                                 st.success(f"🎉 Champion Model Promoted: {best_candidate.upper()}")
                                 registry.register_schema(candidate_df, notes=f"Champion: {best_candidate}")
-                                st.session_state.predictor = ModelPredictor() # Refresh inference engine
+                                st.session_state.predictor = ModelPredictor()
                             else:
                                 st.error("❌ Candidate Model Rejected by Quality Gate. Baseline preserved.")
                             
