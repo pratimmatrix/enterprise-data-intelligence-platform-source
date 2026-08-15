@@ -3,11 +3,12 @@
 # COMPLETE ENTERPRISE PRODUCTION DASHBOARD (app.py)
 # ============================================================
 # Author: Pratim Mistry
-# Architecture: Full End-to-End Self-Healing Streamlit System
+# Architecture: Full End-to-End Enterprise Modular Architecture
 # ============================================================
 
 import sys
 import os
+import hmac
 import json
 import logging
 import traceback
@@ -19,7 +20,7 @@ import numpy as np
 import streamlit as st
 
 # ============================================================
-# 1. ROOT DIRECTORY CONFIGURATION & SYS.PATH INJECTION
+# 1. ROOT PATH SETUP & PYTHON PATH RESOLUTION
 # ============================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -34,10 +35,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
-logger = logging.getLogger("EnterpriseDashboard")
+logger = logging.getLogger("EnterpriseApp")
 
 # ============================================================
-# 3. PAGE CONFIGURATION & CUSTOM THEME STYLING
+# 3. PAGE CONFIGURATION & ENTERPRISE CSS THEME
 # ============================================================
 
 st.set_page_config(
@@ -49,208 +50,177 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .main-title {
-        font-size: 2.3rem;
+    .main-title-text {
+        font-size: 2.35rem;
         font-weight: 800;
-        letter-spacing: -0.8px;
         color: #0f172a;
-        margin-bottom: 0px;
+        letter-spacing: -0.8px;
+        margin-bottom: 2px;
     }
-    .main-subtitle {
+    .main-subtitle-text {
         font-size: 1.05rem;
-        font-weight: 400;
         color: #475569;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.8rem;
     }
-    .section-banner {
+    .section-ribbon {
         background: linear-gradient(90deg, #1e293b 0%, #334155 100%);
         color: #ffffff;
         padding: 12px 20px;
         border-radius: 8px;
         font-weight: 600;
-        font-size: 1.1rem;
-        margin-top: 20px;
+        font-size: 1.05rem;
+        margin-top: 18px;
         margin-bottom: 15px;
     }
-    .metric-card-box {
+    .kpi-card {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 10px;
-        padding: 20px;
+        padding: 18px 22px;
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-        margin-bottom: 15px;
     }
-    .metric-card-title {
-        font-size: 0.85rem;
-        font-weight: 600;
+    .kpi-title {
+        font-size: 0.80rem;
+        font-weight: 700;
         text-transform: uppercase;
         color: #64748b;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
     }
-    .metric-card-value {
-        font-size: 1.8rem;
-        font-weight: 700;
+    .kpi-val {
+        font-size: 1.85rem;
+        font-weight: 800;
         color: #0f172a;
-        margin-top: 5px;
+        margin-top: 4px;
     }
-    .gate-promoted {
+    .gate-promoted-card {
         background-color: #f0fdf4;
         border: 2px solid #22c55e;
         border-radius: 8px;
-        padding: 20px;
+        padding: 22px;
         color: #15803d;
+        margin-top: 15px;
     }
-    .gate-rejected {
+    .gate-rejected-card {
         background-color: #fef2f2;
         border: 2px solid #ef4444;
         border-radius: 8px;
-        padding: 20px;
+        padding: 22px;
         color: #b91c1c;
+        margin-top: 15px;
     }
-    .log-box {
+    .terminal-logs {
         background-color: #0f172a;
         color: #38bdf8;
         font-family: 'Courier New', Courier, monospace;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         padding: 15px;
         border-radius: 6px;
-        height: 250px;
-        overflow-y: scroll;
+        height: 240px;
+        overflow-y: auto;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 4. RESILIENT CLASS IMPORTS WITH DYNAMIC DISCOVERY
+# 4. DIRECT EXACT REPO IMPORTS WITH SAFE ZERO-CRASH FALLBACKS
 # ============================================================
 
-DataLoader = None
-DataValidator = None
-DataProfiler = None
-DataQualityEngine = None
-RelationshipAnalyzer = None
-StatisticalAnalyzer = None
-SemanticAnalyzer = None
-AnomalyEngine = None
-FeatureEngineeringEngine = None
-FeatureValidator = None
-SchemaRegistry = None
-SchemaComparator = None
-AdaptiveModelTrainer = None
-QualityGateEngine = None
-QualityGateDecision = None
-TargetIntegrityEngine = None
-TargetIntegrityError = Exception
-
-# Ingestion
 try:
     from src.ingestion.loader import DataLoader
 except Exception:
-    pass
+    DataLoader = None
 
 try:
     from src.ingestion.validator import DataValidator
 except Exception:
-    pass
+    DataValidator = None
 
-# Profiling Engines
 try:
     from src.profiling.profiler import DataProfiler
 except Exception:
-    pass
+    DataProfiler = None
 
 try:
     from src.profiling.quality import DataQualityEngine
 except Exception:
-    try:
-        from src.profiling.data_quality import DataQualityEngine
-    except Exception:
-        pass
+    DataQualityEngine = None
 
 try:
     from src.profiling.relationships import RelationshipAnalyzer
 except Exception:
-    pass
+    RelationshipAnalyzer = None
 
 try:
     from src.profiling.statistics import StatisticalAnalyzer
 except Exception:
-    pass
+    StatisticalAnalyzer = None
 
 try:
     from src.profiling.semantic import SemanticAnalyzer
 except Exception:
-    pass
+    SemanticAnalyzer = None
 
 try:
     from src.profiling.anomalies import AnomalyEngine
 except Exception:
-    try:
-        from src.profiling.anomaly_engine import AnomalyEngine
-    except Exception:
-        pass
+    AnomalyEngine = None
 
-# Features & Validation
 try:
     from src.feature_engineering.feature_engineer import FeatureEngineeringEngine
 except Exception:
-    try:
-        from src.features.feature_engineering import FeatureEngineeringEngine
-    except Exception:
-        pass
+    FeatureEngineeringEngine = None
 
 try:
     from src.feature_validation.feature_validator import FeatureValidator
 except Exception:
-    try:
-        from src.validation.feature_validator import FeatureValidator
-    except Exception:
-        pass
+    FeatureValidator = None
 
-# Schema Intelligence
 try:
     from src.schema.schema_registry import SchemaRegistry
+except Exception:
+    SchemaRegistry = None
+
+try:
     from src.schema.schema_comparator import SchemaComparator
 except Exception:
-    pass
+    SchemaComparator = None
 
-# Adaptive Retraining & Governance
 try:
     from src.training.adaptive_trainer import AdaptiveModelTrainer
 except Exception:
-    try:
-        from src.modeling.adaptive_trainer import AdaptiveModelTrainer
-    except Exception:
-        pass
+    AdaptiveModelTrainer = None
 
 try:
     from src.training.quality_gate import QualityGateEngine, QualityGateDecision
 except Exception:
-    try:
-        from src.governance.quality_gate import QualityGateEngine, QualityGateDecision
-    except Exception:
-        pass
+    QualityGateEngine = None
+    QualityGateDecision = None
 
 try:
     from src.validation.target_integrity import TargetIntegrityEngine, TargetIntegrityError
 except Exception:
-    pass
+    TargetIntegrityEngine = None
+    TargetIntegrityError = Exception
+
+try:
+    from src.auth.auth_manager import AuthManager
+except Exception:
+    AuthManager = None
 
 # ============================================================
-# 5. DATA INGESTION & SYNTHETIC BENCHMARK GENERATOR
+# 5. DATA INGESTION & DATASET DISCOVERY
 # ============================================================
 
 @st.cache_data(show_spinner=False)
-def load_bank_marketing_dataset() -> pd.DataFrame:
+def load_default_bank_dataset() -> pd.DataFrame:
     """
     Search standard repository directories for bank-full.csv.
-    Fallback to generating a complete deterministic dataset if absent.
+    Fallback to generating high-fidelity dataset if absent.
     """
     search_paths = [
         PROJECT_ROOT / "bank-full.csv",
         PROJECT_ROOT / "data" / "bank-full.csv",
-        PROJECT_ROOT / "data" / "raw" / "bank-full.csv",
-        PROJECT_ROOT / "dataset" / "bank-full.csv"
+        PROJECT_ROOT / "data" / "raw" / "bank-full.csv"
     ]
     for sp in search_paths:
         if sp.exists():
@@ -266,7 +236,6 @@ def load_bank_marketing_dataset() -> pd.DataFrame:
                 except Exception:
                     pass
 
-    # High fidelity synthetic bank dataset fallback
     np.random.seed(42)
     sample_size = 4521
     jobs = ["management", "technician", "entrepreneur", "blue-collar", "retired", "admin.", "services", "self-employed", "unemployed", "housemaid", "student", "unknown"]
@@ -300,13 +269,19 @@ def load_bank_marketing_dataset() -> pd.DataFrame:
 # ============================================================
 
 if "raw_df" not in st.session_state:
-    st.session_state.raw_df = load_bank_marketing_dataset()
+    st.session_state.raw_df = load_default_bank_dataset()
+
+if "active_dataset_name" not in st.session_state:
+    st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
+
+if "last_source_choice" not in st.session_state:
+    st.session_state.last_source_choice = "Benchmark Production Dataset"
+
+if "is_authenticated" not in st.session_state:
+    st.session_state.is_authenticated = False
 
 if "retrain_results" not in st.session_state:
     st.session_state.retrain_results = None
-
-if "schema_diff_report" not in st.session_state:
-    st.session_state.schema_diff_report = None
 
 if "active_logs" not in st.session_state:
     st.session_state.active_logs = [
@@ -319,48 +294,120 @@ def append_log(msg: str):
     st.session_state.active_logs.append(f">> {msg}")
 
 # ============================================================
-# 7. SIDEBAR ORCHESTRATION & CONTROLS
+# 7. SIDEBAR CONTROLS & REPOSITORY META
 # ============================================================
 
 with st.sidebar:
     st.markdown("## ⚙️ Enterprise Control Center")
-    st.markdown("Configure operational parameters, data streams, and compliance quality thresholds.")
-    
+    st.markdown("Configure operational parameters, data streams, authentication, and governance controls.")
+
+    # --------------------------------------------------------
+    # AUTHENTICATION
+    # --------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🔐 Administrator Authentication")
+
+    if not st.session_state.is_authenticated:
+        with st.form("admin_login_form", clear_on_submit=False):
+            username = st.text_input("Username", placeholder="Enter administrator ID")
+            password = st.text_input("Password", type="password", placeholder="Enter password")
+            login_btn = st.form_submit_button("🔓 Authenticate")
+
+            if login_btn:
+                # Safe fallback to prevent lockout if AuthManager is missing
+                is_valid = False
+                if AuthManager is not None:
+                    is_valid = AuthManager.verify_credentials(username, password)
+                else:
+                    is_valid = hmac.compare_digest(username, "admin") and hmac.compare_digest(password, "admin123")
+
+                if is_valid:
+                    st.session_state.is_authenticated = True
+                    append_log("AUTHENTICATION: Administrator authenticated successfully.")
+                    st.success("Authentication successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid administrator credentials.")
+    else:
+        st.success("🔓 Authenticated as Administrator")
+        if st.button("🚪 Log Out"):
+            st.session_state.is_authenticated = False
+            st.session_state.last_source_choice = "Benchmark Production Dataset"
+            st.session_state.raw_df = load_default_bank_dataset().copy()
+            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
+            st.session_state.retrain_results = None
+            append_log("AUTHENTICATION: Administrator logged out; candidate dataset access revoked and baseline restored.")
+            st.rerun()
+
+    # --------------------------------------------------------
+    # DATA SOURCE
+    # --------------------------------------------------------
     st.markdown("---")
     st.markdown("### 📥 Ingestion Source")
-    
-    source_choice = st.radio(
-        "Select Active Pipeline Data Source:",
-        ["Benchmark Production Dataset", "Upload Candidate Dataset (CSV)"]
-    )
-    
-    if source_choice == "Upload Candidate Dataset (CSV)":
-        uploaded_csv = st.file_uploader("Upload Retraining Candidate CSV", type=["csv"])
-        if uploaded_csv is not None:
-            try:
-                sample_head = uploaded_csv.read(2048).decode("utf-8", errors="ignore")
-                uploaded_csv.seek(0)
-                delimiter = ";" if sample_head.count(";") > sample_head.count(",") else ","
-                candidate_df = pd.read_csv(uploaded_csv, sep=delimiter)
-                st.session_state.raw_df = candidate_df
-                append_log(f"NEW INGESTION: Candidate CSV loaded with shape {candidate_df.shape}")
-                st.success(f"Loaded {candidate_df.shape[0]} rows × {candidate_df.shape[1]} cols")
-            except Exception as ex:
-                st.error(f"Error parsing uploaded file: {ex}")
-    else:
-        if st.button("🔄 Reset to Default Production Baseline", use_container_width=True):
-            st.session_state.raw_df = load_bank_marketing_dataset()
+
+    if not st.session_state.is_authenticated:
+        source_choice = "Benchmark Production Dataset"
+        if st.session_state.last_source_choice != "Benchmark Production Dataset":
+            st.session_state.last_source_choice = "Benchmark Production Dataset"
+            st.session_state.raw_df = load_default_bank_dataset().copy()
+            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
             st.session_state.retrain_results = None
-            st.session_state.schema_diff_report = None
+            append_log("SECURITY: Candidate upload access denied; restored production baseline.")
+
+        st.info("🔒 Candidate CSV upload is locked. Authenticate as an administrator to upload a new CSV dataset.")
+    else:
+        source_choice = st.radio(
+            "Select Active Pipeline Data Source:",
+            ["Benchmark Production Dataset", "Upload Candidate Dataset (CSV)"],
+            index=0 if st.session_state.last_source_choice == "Benchmark Production Dataset" else 1
+        )
+
+        if source_choice != st.session_state.last_source_choice:
+            st.session_state.last_source_choice = source_choice
+            if source_choice == "Benchmark Production Dataset":
+                st.session_state.raw_df = load_default_bank_dataset().copy()
+                st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
+                st.session_state.retrain_results = None
+                append_log("DATA SOURCE: Restored original bank-full.csv production baseline.")
+                st.rerun()
+
+        if source_choice == "Upload Candidate Dataset (CSV)":
+            st.success("🔓 Administrator access verified — candidate CSV upload enabled.")
+            uploaded_csv = st.file_uploader("Upload Candidate CSV", type=["csv"], key="active_dataset_upload")
+            if uploaded_csv is not None:
+                try:
+                    sample_head = uploaded_csv.read(4096).decode("utf-8", errors="ignore")
+                    uploaded_csv.seek(0)
+                    delimiter = ";" if sample_head.count(";") > sample_head.count(",") else ","
+                    candidate_df = pd.read_csv(uploaded_csv, sep=delimiter)
+
+                    if candidate_df.empty:
+                        st.error("The uploaded CSV is empty.")
+                    else:
+                        st.session_state.raw_df = candidate_df.copy()
+                        st.session_state.active_dataset_name = uploaded_csv.name
+                        st.session_state.retrain_results = None
+                        append_log(f"NEW INGESTION: {uploaded_csv.name} loaded with shape {candidate_df.shape}")
+                        st.success(f"Active dataset: {uploaded_csv.name} • {candidate_df.shape[0]:,} rows × {candidate_df.shape[1]} columns")
+                except Exception as ex:
+                    st.error(f"Error parsing uploaded file: {ex}")
+
+    st.caption(f"**Active dataset:** {st.session_state.active_dataset_name}")
+
+    if source_choice == "Benchmark Production Dataset":
+        if st.button("🔄 Reset to Default Production Baseline"):
+            st.session_state.raw_df = load_default_bank_dataset().copy()
+            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
+            st.session_state.retrain_results = None
             append_log("RESET: Reverted dataset to default baseline.")
             st.rerun()
 
     st.markdown("---")
     st.markdown("### 🎯 Supervised Target Configuration")
-    
+
     available_cols = list(st.session_state.raw_df.columns)
     target_default_idx = available_cols.index("y") if "y" in available_cols else len(available_cols) - 1
-    
+
     selected_target = st.selectbox(
         "Supervised Target Column ('y')",
         options=available_cols,
@@ -369,70 +416,70 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🛡️ Quality Gate Policy Controls")
-    
+
     gate_min_roc = st.slider("Minimum Production ROC-AUC", 0.50, 0.95, 0.70, 0.01)
     gate_min_f1 = st.slider("Minimum Production F1-Score", 0.10, 0.90, 0.35, 0.01)
     gate_max_drop = st.slider("Max Permissible Degradation", 0.01, 0.20, 0.05, 0.01)
-    
+
     st.markdown("---")
     st.markdown("### 📋 Runtime Execution Log")
     log_text = "\n".join(st.session_state.active_logs[-10:])
-    st.markdown(f'<div class="log-box">{log_text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="terminal-logs">{log_text}</div>', unsafe_allow_html=True)
 
 # ============================================================
 # 8. HEADER & ENTERPRISE KPI RIBBON
 # ============================================================
 
-st.markdown('<div class="main-title">⚡ Autonomous Enterprise Data & Decision Intelligence Platform</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-subtitle">Automated Multi-Engine Profiling • Dynamic Feature Engineering • Adaptive Retraining • Automated Governance Quality Gate</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title-text">⚡ Autonomous Enterprise Data & Decision Intelligence Platform</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-subtitle-text">Production Multi-Engine Profiling • Dynamic Feature Engineering • Adaptive Retraining • Automated Governance Quality Gate</div>', unsafe_allow_html=True)
 
 df_active = st.session_state.raw_df
 
 col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
 
 with col_kpi1:
-    st.markdown("""
-    <div class="metric-card-box">
-        <div class="metric-card-title">Total Records</div>
-        <div class="metric-card-value">{:,}</div>
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-title">Total Records</div>
+        <div class="kpi-val">{df_active.shape[0]:,}</div>
     </div>
-    """.format(df_active.shape[0]), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col_kpi2:
-    st.markdown("""
-    <div class="metric-card-box">
-        <div class="metric-card-title">Total Features</div>
-        <div class="metric-card-value">{}</div>
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-title">Total Features</div>
+        <div class="kpi-val">{df_active.shape[1]}</div>
     </div>
-    """.format(df_active.shape[1]), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col_kpi3:
     duplicate_rows = int(df_active.duplicated().sum())
-    st.markdown("""
-    <div class="metric-card-box">
-        <div class="metric-card-title">Duplicate Rows</div>
-        <div class="metric-card-value">{:,}</div>
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-title">Duplicate Rows</div>
+        <div class="kpi-val">{duplicate_rows:,}</div>
     </div>
-    """.format(duplicate_rows), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col_kpi4:
     missing_cells = int(df_active.isnull().sum().sum())
-    st.markdown("""
-    <div class="metric-card-box">
-        <div class="metric-card-title">Missing Cells</div>
-        <div class="metric-card-value">{:,}</div>
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-title">Missing Cells</div>
+        <div class="kpi-val">{missing_cells:,}</div>
     </div>
-    """.format(missing_cells), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col_kpi5:
     mem_footprint_kb = df_active.memory_usage(deep=True).sum() / 1024
     mem_str = f"{mem_footprint_kb:.1f} KB" if mem_footprint_kb < 1024 else f"{mem_footprint_kb/1024:.2f} MB"
-    st.markdown("""
-    <div class="metric-card-box">
-        <div class="metric-card-title">Memory Footprint</div>
-        <div class="metric-card-value">{}</div>
+    st.markdown(f"""
+    <div class="kpi-card">
+        <div class="kpi-title">Memory Footprint</div>
+        <div class="kpi-val">{mem_str}</div>
     </div>
-    """.format(mem_str), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 st.write("")
 
@@ -454,17 +501,17 @@ tabs = st.tabs([
 # TAB 1: INGESTION & PRE-FLIGHT VALIDATION
 # ============================================================
 with tabs[0]:
-    st.markdown('<div class="section-banner">📂 MODULE 1: INGESTION PIPELINE & TARGET INTEGRITY ENGINE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">📂 MODULE 1: INGESTION PIPELINE & TARGET INTEGRITY ENGINE</div>', unsafe_allow_html=True)
     st.markdown("Raw data exploration, structural typing, delimiter normalization, and strict target distribution audits.")
     
     col_t1_left, col_t1_right = st.columns([3, 2])
     
     with col_t1_left:
         st.markdown("#### 📄 Dataset Sample (Top 10 Rows)")
-        st.dataframe(df_active.head(10), use_container_width=True)
+        st.dataframe(df_active.head(10))
         
         st.markdown("#### 📄 Dataset Tail (Last 5 Rows)")
-        st.dataframe(df_active.tail(5), use_container_width=True)
+        st.dataframe(df_active.tail(5))
 
     with col_t1_right:
         st.markdown("#### 📋 Column Schema Definitions")
@@ -476,7 +523,7 @@ with tabs[0]:
                 "Non-Null Count": int(df_active[col].notnull().sum()),
                 "Unique Levels": int(df_active[col].nunique())
             })
-        st.dataframe(pd.DataFrame(schema_summary), use_container_width=True, height=420)
+        st.dataframe(pd.DataFrame(schema_summary), height=420)
 
     st.markdown("---")
     st.markdown("### 🎯 Supervised Target Protection Audit")
@@ -488,15 +535,10 @@ with tabs[0]:
             st.success(f"✅ Target integrity check PASSED: Target column '{selected_target}' is valid and fully normalized.")
             
             c_val1, c_val2, c_val3, c_val4 = st.columns(4)
-            with c_val1:
-                st.metric("Integrity Status", target_report.get("status", "VALID"))
-            with c_val2:
-                st.metric("Total Observations", f"{target_report.get('total_samples', 0):,}")
-            with c_val3:
-                st.metric("Positive Class Rate", f"{target_report.get('positive_class_percentage', 0.0):.2f}%")
-            with c_val4:
-                is_imb = target_report.get("is_imbalanced", False)
-                st.metric("Imbalance Flag", "⚠️ Imbalanced" if is_imb else "✅ Balanced")
+            c_val1.metric("Integrity Status", target_report.get("status", "VALID"))
+            c_val2.metric("Total Observations", f"{target_report.get('total_samples', 0):,}")
+            c_val3.metric("Positive Class Rate", f"{target_report.get('positive_class_percentage', 0.0):.2f}%")
+            c_val4.metric("Imbalance Flag", "⚠️ Imbalanced" if target_report.get("is_imbalanced", False) else "✅ Balanced")
             
             st.markdown("#### Target Class Distribution Histogram")
             st.bar_chart(df_active[selected_target].value_counts())
@@ -510,7 +552,7 @@ with tabs[0]:
 # TAB 2: DEEP MULTI-ENGINE PROFILING
 # ============================================================
 with tabs[1]:
-    st.markdown('<div class="section-banner">📊 MODULE 2: MULTI-ENGINE ENTERPRISE DATA PROFILING</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">📊 MODULE 2: MULTI-ENGINE ENTERPRISE DATA PROFILING</div>', unsafe_allow_html=True)
     st.markdown("Exhaustive analysis across automated data quality engines, statistical distribution analytics, and correlation matrices.")
     
     subtab_qual, subtab_stat, subtab_rel, subtab_sem = st.tabs([
@@ -520,9 +562,6 @@ with tabs[1]:
         "🏷️ Semantic & Sentinel Flags"
     ])
     
-    # ------------------------------------------------------------
-    # SUBTAB 2.1: QUALITY SCORE
-    # ------------------------------------------------------------
     with subtab_qual:
         st.markdown("### 🛡️ Enterprise Data Quality Assessment Engine")
         
@@ -533,14 +572,10 @@ with tabs[1]:
             col_q1, col_q2, col_q3, col_q4 = st.columns(4)
             score = quality_output.get("quality_score", 0.0)
             
-            with col_q1:
-                st.metric("Overall Quality Index", f"{score} / 100")
-            with col_q2:
-                st.metric("Missing Value Cells", quality_output.get("missing_values", 0))
-            with col_q3:
-                st.metric("Duplicate Record Count", quality_output.get("duplicate_rows", 0))
-            with col_q4:
-                st.metric("Placeholder / Unknowns", quality_output.get("unknown_values", 0))
+            col_q1.metric("Overall Quality Index", f"{score} / 100")
+            col_q2.metric("Missing Value Cells", quality_output.get("missing_values", 0))
+            col_q3.metric("Duplicate Record Count", quality_output.get("duplicate_rows", 0))
+            col_q4.metric("Placeholder / Unknowns", quality_output.get("unknown_values", 0))
             
             st.progress(min(1.0, max(0.0, score / 100.0)))
             
@@ -553,9 +588,6 @@ with tabs[1]:
         else:
             st.dataframe(df_active.isnull().sum())
 
-    # ------------------------------------------------------------
-    # SUBTAB 2.2: STATISTICAL INTELLIGENCE
-    # ------------------------------------------------------------
     with subtab_stat:
         st.markdown("### 📈 Numerical Feature Distribution & Outlier Metrics")
         
@@ -565,15 +597,12 @@ with tabs[1]:
             
             if stat_results:
                 stat_df = pd.DataFrame.from_dict(stat_results, orient="index")
-                st.dataframe(stat_df.style.highlight_max(axis=0, color="#dbeafe"), use_container_width=True)
+                st.dataframe(stat_df.style.highlight_max(axis=0, color="#dbeafe"))
             else:
                 st.info("No numerical attributes detected for statistical profiling.")
         else:
             st.dataframe(df_active.describe().T)
 
-    # ------------------------------------------------------------
-    # SUBTAB 2.3: RELATIONSHIPS & CORRELATIONS
-    # ------------------------------------------------------------
     with subtab_rel:
         st.markdown("### 🔗 Inter-Feature Correlation & Target Relationship Matrix")
         
@@ -585,7 +614,7 @@ with tabs[1]:
             with col_rel_left:
                 st.markdown("#### 📐 Pairwise Numeric Correlation Heatmap Table")
                 corr_matrix = num_cols_only.corr()
-                st.dataframe(corr_matrix.style.background_gradient(cmap="vlag", vmin=-1.0, vmax=1.0), use_container_width=True)
+                st.dataframe(corr_matrix.style.background_gradient(cmap="coolwarm", vmin=-1.0, vmax=1.0))
             
             with col_rel_right:
                 st.markdown("#### 🔍 Filtered High Correlation Pairs (|r| ≥ 0.30)")
@@ -594,15 +623,12 @@ with tabs[1]:
                     rel_data = rel_engine.analyze(df_active, target=selected_target)
                     corrs = rel_data.get("numeric_correlations", [])
                     if corrs:
-                        st.dataframe(pd.DataFrame(corrs), use_container_width=True)
+                        st.dataframe(pd.DataFrame(corrs))
                     else:
                         st.info("No pairwise numerical features exceed the |r| ≥ 0.30 correlation threshold.")
                 else:
-                    st.info("Relationship engine active in standard mode.")
+                    st.info("Relationship analyzer active.")
 
-    # ------------------------------------------------------------
-    # SUBTAB 2.4: SEMANTIC & SENTINEL FLAGS
-    # ------------------------------------------------------------
     with subtab_sem:
         st.markdown("### 🏷️ Semantic Flags & Sentinel Detection Engine")
         st.markdown("Detects domain-specific placeholder flags, negative numerical sentinels (e.g. `pdays=-1`), and special tokens.")
@@ -623,17 +649,17 @@ with tabs[1]:
                     })
             
             if records:
-                st.dataframe(pd.DataFrame(records), use_container_width=True)
+                st.dataframe(pd.DataFrame(records))
             else:
                 st.success("No hidden sentinel values or placeholder markers identified.")
         else:
-            st.info("Semantic analyzer module available in standard mode.")
+            st.info("Semantic analyzer module available.")
 
 # ============================================================
 # TAB 3: ANOMALY INTELLIGENCE
 # ============================================================
 with tabs[2]:
-    st.markdown('<div class="section-banner">🔍 MODULE 3: ANOMALY INTELLIGENCE & OUTLIER DETECTION</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">🔍 MODULE 3: ANOMALY INTELLIGENCE & OUTLIER DETECTION</div>', unsafe_allow_html=True)
     st.markdown("Multi-method anomaly detection leveraging Interquartile Range (IQR) bounds and Z-score distributions.")
     
     numeric_features = df_active.select_dtypes(include=np.number).columns.tolist()
@@ -663,7 +689,7 @@ with tabs[2]:
         
         st.markdown(f"#### 🔎 Sample Anomalous Records Detected for `{chosen_anom_col}`")
         if not outlier_rows.empty:
-            st.dataframe(outlier_rows.head(20), use_container_width=True)
+            st.dataframe(outlier_rows.head(20))
         else:
             st.success(f"No statistical anomalies detected for feature '{chosen_anom_col}' within selected bounds.")
     else:
@@ -673,19 +699,21 @@ with tabs[2]:
 # TAB 4: SCHEMA DRIFT & REGISTRY
 # ============================================================
 with tabs[3]:
-    st.markdown('<div class="section-banner">🧬 MODULE 4: SCHEMA PROVENANCE & RETRAINING DRIFT GUARD</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">🧬 MODULE 4: SCHEMA PROVENANCE & RETRAINING DRIFT GUARD</div>', unsafe_allow_html=True)
     st.markdown("Compares candidate dataset schemas against the registered baseline version. Detects structural mutations, data type changes, and unseen categorical levels.")
     
     if SchemaRegistry and SchemaComparator:
         reg_engine = SchemaRegistry()
         comp_engine = SchemaComparator(registry=reg_engine)
         
-        active_baseline = reg_engine.get_active_schema()
         diff_payload = comp_engine.compare_against_active(df_active, target_column=selected_target)
         
         if diff_payload.get("is_initial_schema"):
             st.info("ℹ️ No active production schema currently registered. Register this dataset to initialize the baseline.")
-            if st.button("📝 Register Current Schema as Production Baseline (v1.0)", type="primary"):
+            if st.button("📝 Register Current Schema as Production Baseline (v1.0)"):
+                if not st.session_state.is_authenticated:
+                    st.warning("🔐 Administrator authentication is required to register a production baseline.")
+                    st.stop()
                 reg_engine.register_schema(df_active, version_tag="v1.0", target_column=selected_target, notes="Initial Production Schema Baseline")
                 append_log("SCHEMA REGISTRY: Registered baseline schema v1.0")
                 st.success("Registered v1.0 baseline schema successfully!")
@@ -725,7 +753,7 @@ with tabs[3]:
 # TAB 5: FEATURE ENGINEERING STUDIO
 # ============================================================
 with tabs[4]:
-    st.markdown('<div class="section-banner">⚙️ MODULE 5: FEATURE ENGINEERING STUDIO</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">⚙️ MODULE 5: FEATURE ENGINEERING STUDIO</div>', unsafe_allow_html=True)
     st.markdown("Transform raw inputs into predictive domain signals: campaign indicators, interaction features, and balance bins.")
     
     col_fe_ctrl, col_fe_view = st.columns([1, 2])
@@ -736,8 +764,10 @@ with tabs[4]:
         st.checkbox("Create `balance_to_age` ratio interaction", value=True)
         st.checkbox("Encode `campaign_intensity` log transform", value=True)
         
-        if st.button("⚡ Apply Feature Engineering Pipeline", use_container_width=True):
-            if FeatureEngineeringEngine:
+        if st.button("⚡ Apply Feature Engineering Pipeline"):
+            if not st.session_state.is_authenticated:
+                st.warning("🔐 Administrator authentication is required to modify the active production dataset.")
+            elif FeatureEngineeringEngine:
                 fe_engine = FeatureEngineeringEngine()
                 try:
                     df_engineered = fe_engine.create_features(df_active)
@@ -757,31 +787,34 @@ with tabs[4]:
             "Column Name": df_active.columns,
             "Type": [str(t) for t in df_active.dtypes]
         })
-        st.dataframe(current_cols, use_container_width=True, height=350)
+        st.dataframe(current_cols, height=350)
 
 # ============================================================
 # TAB 6: ADAPTIVE RETRAINING & GOVERNANCE GATE
 # ============================================================
 with tabs[5]:
-    st.markdown('<div class="section-banner">🚀 MODULE 6: ADAPTIVE RETRAINING PIPELINE & PRODUCTION GOVERNANCE GATE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">🚀 MODULE 6: ADAPTIVE RETRAINING PIPELINE & PRODUCTION GOVERNANCE GATE</div>', unsafe_allow_html=True)
     st.markdown("Executes dynamic preprocessing, handles class imbalance via cost-sensitive learning, trains multiple model families, and evaluates against automated promotion gates.")
     
     st.markdown("### ⚡ Execute Model Training Orchestration")
     
-    if st.button("🚀 Trigger Full Adaptive Retraining Cycle", type="primary", use_container_width=True):
-        with st.spinner("Building dynamic feature transformers, balancing class weights, and evaluating candidate classifiers..."):
-            if AdaptiveModelTrainer:
-                trainer = AdaptiveModelTrainer()
-                try:
-                    results = trainer.train_and_evaluate(df_active)
-                    st.session_state.retrain_results = results
-                    append_log("TRAINING ENGINE: Completed multi-algorithm retraining cycle.")
-                    st.success("🎉 Adaptive Retraining Pipeline Completed Successfully!")
-                except Exception as e:
-                    st.error(f"Retraining execution failed: {e}")
-                    st.code(traceback.format_exc())
-            else:
-                st.error("AdaptiveModelTrainer module not loaded.")
+    if st.button("🚀 Trigger Full Adaptive Retraining Cycle", type="primary"):
+        if not st.session_state.is_authenticated:
+            st.warning("🔐 Administrator authentication is required to execute adaptive retraining.")
+        else:
+            with st.spinner("Building dynamic feature transformers, balancing class weights, and evaluating candidate classifiers..."):
+                if AdaptiveModelTrainer:
+                    trainer = AdaptiveModelTrainer()
+                    try:
+                        results = trainer.train_and_evaluate(df_active)
+                        st.session_state.retrain_results = results
+                        append_log("TRAINING ENGINE: Completed multi-algorithm retraining cycle.")
+                        st.success("🎉 Adaptive Retraining Pipeline Completed Successfully!")
+                    except Exception as e:
+                        st.error(f"Retraining execution failed: {e}")
+                        st.code(traceback.format_exc())
+                else:
+                    st.error("AdaptiveModelTrainer module not loaded.")
 
     if st.session_state.retrain_results:
         retrain_payload = st.session_state.retrain_results
@@ -804,7 +837,7 @@ with tabs[5]:
                 "Status": "⭐ CHAMPION" if m_name == champ_name else "Candidate"
             })
         
-        st.dataframe(pd.DataFrame(matrix_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(matrix_rows))
         
         st.markdown("---")
         st.markdown("### ⚖️ Production Quality Gate Evaluation")
@@ -822,7 +855,7 @@ with tabs[5]:
             
             if gate_decision == "PROMOTE":
                 st.markdown(f"""
-                <div class="gate-promoted">
+                <div class="gate-promoted-card">
                     <h3>🟢 DECISION: PROMOTED TO PRODUCTION CHAMPION</h3>
                     <p><b>Candidate Model:</b> {champ_name.replace('_', ' ').title()}</p>
                     <p>{reasons_list[0] if reasons_list else 'Passed all constraints.'}</p>
@@ -831,7 +864,7 @@ with tabs[5]:
             else:
                 reason_items = "".join([f"<li>{r}</li>" for r in reasons_list])
                 st.markdown(f"""
-                <div class="gate-rejected">
+                <div class="gate-rejected-card">
                     <h3>🔴 DECISION: REJECTED (ROLLBACK TO ACTIVE BASELINE)</h3>
                     <p><b>Candidate Model:</b> {champ_name.replace('_', ' ').title()}</p>
                     <ul>{reason_items}</ul>
@@ -842,7 +875,7 @@ with tabs[5]:
 # TAB 7: REAL-TIME INFERENCE & DECISION EXPLAINABILITY
 # ============================================================
 with tabs[6]:
-    st.markdown('<div class="section-banner">🔮 MODULE 7: REAL-TIME INFERENCE & DECISION EXPLAINABILITY</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-ribbon">🔮 MODULE 7: REAL-TIME INFERENCE & DECISION EXPLAINABILITY</div>', unsafe_allow_html=True)
     st.markdown("Interactive inference engine for generating customer term-deposit subscription probabilities with explainability factors.")
     
     col_inf1, col_inf2, col_inf3 = st.columns(3)
@@ -873,8 +906,7 @@ with tabs[6]:
         in_day = st.slider("Last Contact Day of Month", 1, 31, 15)
 
     st.markdown("---")
-    if st.button("🔮 Compute Real-Time Subscription Probability", type="primary", use_container_width=True):
-        # High-dimensional domain heuristic simulation
+    if st.button("🔮 Compute Real-Time Subscription Probability", type="primary"):
         base_probability = 0.11
         if in_duration > 350:
             base_probability += 0.38
