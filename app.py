@@ -487,6 +487,54 @@ st.write("")
 # 9. MAIN TABBED PLATFORM INTERFACE
 # ============================================================
 
+st.markdown("""
+<style>
+
+/* ============================================================
+   MOBILE + DESKTOP SWIPEABLE STREAMLIT TABS
+   ============================================================ */
+
+.stTabs [data-baseweb="tab-list"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    width: 100% !important;
+
+    -webkit-overflow-scrolling: touch !important;
+    scroll-behavior: smooth !important;
+
+    touch-action: pan-x !important;
+
+    scrollbar-width: none !important;
+}
+
+.stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+    display: none !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    min-width: max-content !important;
+    padding: 12px 16px !important;
+}
+
+@media (max-width: 768px) {
+    .stTabs [data-baseweb="tab"] {
+        font-size: 13px !important;
+        padding: 11px 14px !important;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 4px !important;
+    }
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 tabs = st.tabs([
     "📂 1. Ingestion & Pre-Flight",
     "📊 2. Deep Data Profiling",
@@ -496,6 +544,7 @@ tabs = st.tabs([
     "🚀 6. Adaptive Retraining & Governance",
     "🔮 7. Real-Time Inference & Explainability"
 ])
+
 
 # ============================================================
 # TAB 1: INGESTION & PRE-FLIGHT VALIDATION
