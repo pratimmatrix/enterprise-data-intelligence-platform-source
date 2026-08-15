@@ -1,13 +1,35 @@
+"""
+Model Registry Engine
+Enterprise Customer Intelligence Platform
+
+Author: Pratim Mistry
+Description:
+Tracks trained model artifacts, evaluation metrics, and active production model selections
+in a persistent JSON metadata registry.
+"""
+
 import json
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Any, Optional, Union
 
 
 class ModelRegistry:
 
-    def __init__(self, model_directory="models"):
+    def __init__(self, model_directory: Union[str, Path] = "models"):
 
-        self.model_directory = Path(model_directory)
+        # Dynamically locate models directory from project root if relative
+        dir_path = Path(model_directory)
+        if not dir_path.is_absolute():
+            current_path = Path(__file__).resolve()
+            root_dir = current_path.parent
+            for _ in range(4):
+                if (root_dir / "models").exists() or (root_dir / "src").exists():
+                    break
+                root_dir = root_dir.parent
+            self.model_directory = root_dir / "models"
+        else:
+            self.model_directory = dir_path
 
         self.model_directory.mkdir(
             parents=True,
@@ -26,11 +48,11 @@ class ModelRegistry:
 
     def register_model(
         self,
-        model_name,
-        model_path,
-        metrics,
-        selection_strategy,
-        selected=False
+        model_name: str,
+        model_path: Union[str, Path],
+        metrics: Dict[str, Any],
+        selection_strategy: str,
+        selected: bool = False
     ):
 
         # ----------------------------------------------------
@@ -38,6 +60,17 @@ class ModelRegistry:
         # ----------------------------------------------------
 
         registry = self.load_registry()
+
+        # ----------------------------------------------------
+        # Safe metric extraction helper
+        # ----------------------------------------------------
+
+        def get_metric(key: str) -> float:
+            try:
+                val = metrics.get(key, 0.0)
+                return float(val if val is not None else 0.0)
+            except (ValueError, TypeError):
+                return 0.0
 
         # ----------------------------------------------------
         # Create model record
@@ -49,21 +82,11 @@ class ModelRegistry:
             "selection_strategy": selection_strategy,
             "selected": selected,
             "metrics": {
-                "accuracy": float(
-                    metrics["accuracy"]
-                ),
-                "precision": float(
-                    metrics["precision"]
-                ),
-                "recall": float(
-                    metrics["recall"]
-                ),
-                "f1": float(
-                    metrics["f1"]
-                ),
-                "roc_auc": float(
-                    metrics["roc_auc"]
-                )
+                "accuracy": get_metric("accuracy"),
+                "precision": get_metric("precision"),
+                "recall": get_metric("recall"),
+                "f1": get_metric("f1"),
+                "roc_auc": get_metric("roc_auc")
             },
             "registered_at": (
                 datetime.now().isoformat()
@@ -93,7 +116,7 @@ class ModelRegistry:
         registry["models"] = [
             record
             for record in registry["models"]
-            if record["model_name"] != model_name
+            if record.get("model_name") != model_name
         ]
 
         registry["models"].append(
@@ -116,7 +139,7 @@ class ModelRegistry:
     # LOAD REGISTRY
     # ========================================================
 
-    def load_registry(self):
+    def load_registry(self) -> Dict[str, Any]:
 
         if not self.registry_path.exists():
 
@@ -126,19 +149,26 @@ class ModelRegistry:
                 "models": []
             }
 
-        with open(
-            self.registry_path,
-            "r",
-            encoding="utf-8"
-        ) as file:
+        try:
+            with open(
+                self.registry_path,
+                "r",
+                encoding="utf-8"
+            ) as file:
 
-            return json.load(file)
+                return json.load(file)
+        except Exception:
+            return {
+                "selected_model": None,
+                "selected_model_path": None,
+                "models": []
+            }
 
     # ========================================================
     # SAVE REGISTRY
     # ========================================================
 
-    def save_registry(self, registry):
+    def save_registry(self, registry: Dict[str, Any]):
 
         with open(
             self.registry_path,
@@ -161,7 +191,7 @@ class ModelRegistry:
     # GET SELECTED MODEL
     # ========================================================
 
-    def get_selected_model(self):
+    def get_selected_model(self) -> str:
 
         registry = self.load_registry()
 
@@ -183,7 +213,7 @@ class ModelRegistry:
     # GET SELECTED MODEL PATH
     # ========================================================
 
-    def get_selected_model_path(self):
+    def get_selected_model_path(self) -> str:
 
         registry = self.load_registry()
 
@@ -237,39 +267,41 @@ class ModelRegistry:
             []
         ):
 
+            metrics = model.get("metrics", {})
+
             print(
                 f"Model     : "
-                f"{model['model_name']}"
+                f"{model.get('model_name')}"
             )
 
             print(
                 f"Selected  : "
-                f"{model['selected']}"
+                f"{model.get('selected')}"
             )
 
             print(
                 f"Accuracy  : "
-                f"{model['metrics']['accuracy']:.4f}"
+                f"{metrics.get('accuracy', 0.0):.4f}"
             )
 
             print(
                 f"Precision : "
-                f"{model['metrics']['precision']:.4f}"
+                f"{metrics.get('precision', 0.0):.4f}"
             )
 
             print(
                 f"Recall    : "
-                f"{model['metrics']['recall']:.4f}"
+                f"{metrics.get('recall', 0.0):.4f}"
             )
 
             print(
                 f"F1        : "
-                f"{model['metrics']['f1']:.4f}"
+                f"{metrics.get('f1', 0.0):.4f}"
             )
 
             print(
                 f"ROC-AUC   : "
-                f"{model['metrics']['roc_auc']:.4f}"
+                f"{metrics.get('roc_auc', 0.0):.4f}"
             )
 
             print(
