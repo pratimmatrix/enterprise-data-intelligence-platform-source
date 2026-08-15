@@ -7,7 +7,7 @@ Loads persisted champion models from local/cloud relative paths and runs real-ti
 """
 
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 import joblib
 import pandas as pd
 import numpy as np
@@ -19,26 +19,71 @@ class ModelPredictor:
     """
 
     def __init__(self, model_path: Union[str, Path] = "models/artifacts/champion_pipeline.pkl"):
-        self.project_root = Path(__file__).resolve().parents[2]
-        self.model_path = self.project_root / Path(model_path)
+
+        # Resolve project root dynamically across varying directory depths
+        current_path = Path(__file__).resolve()
+        root_dir = current_path.parent
+
+        for _ in range(4):
+            if (root_dir / "models").exists() or (root_dir / "src").exists():
+                break
+            root_dir = root_dir.parent
+
+        self.project_root = root_dir
+
+        candidate_path = Path(model_path)
+        if candidate_path.is_absolute():
+            self.model_path = candidate_path
+        else:
+            self.model_path = self.project_root / candidate_path
+
         self.model = None
+
+        print(f"ModelPredictor initialized. Target model path: {self.model_path}")
+
+    # ========================================================
+    # LOAD ARTIFACT
+    # ========================================================
 
     def load_model(self):
         """
-        Load the champion model artifact into memory.
+        Load the champion model artifact into memory with fallbacks.
         """
+
         if not self.model_path.exists():
-            raise FileNotFoundError(
-                f"Champion model artifact not found at:\n{self.model_path}\n"
-                "Please train baseline models first."
-            )
+
+            fallbacks = [
+                self.project_root / "models" / "champion_pipeline.pkl",
+                self.project_root / "models" / "random_forest_pipeline.pkl",
+                self.project_root / "models" / "gradient_boosting_pipeline.pkl",
+                self.project_root / "models" / "logistic_regression_pipeline.pkl"
+            ]
+
+            found_fallback = False
+            for fb in fallbacks:
+                if fb.exists():
+                    self.model_path = fb
+                    found_fallback = True
+                    break
+
+            if not found_fallback:
+                raise FileNotFoundError(
+                    f"Champion model artifact not found at:\n{self.model_path}\n"
+                    "Please train baseline models first."
+                )
+
         self.model = joblib.load(self.model_path)
         return self.model
+
+    # ========================================================
+    # REAL-TIME INFERENCE
+    # ========================================================
 
     def predict(self, customer_data: Union[Dict[str, Any], pd.DataFrame]) -> Dict[str, Any]:
         """
         Run inference on single customer dict or DataFrame.
         """
+
         if self.model is None:
             self.load_model()
 
@@ -49,13 +94,23 @@ class ModelPredictor:
         else:
             raise TypeError("Input data must be a dictionary or pandas DataFrame.")
 
-        # Drop target if accidentally included in inference payload
+        # Safely drop target 'y' and leaky 'duration' if present in input
+        cols_to_drop = []
         if "y" in df_input.columns:
-            df_input = df_input.drop(columns=["y"])
+            cols_to_drop.append("y")
+        if "duration" in df_input.columns:
+            cols_to_drop.append("duration")
+
+        if cols_to_drop:
+            df_input = df_input.drop(columns=cols_to_drop)
 
         # Predict class and probability
         prediction = self.model.predict(df_input)[0]
-        probability = float(self.model.predict_proba(df_input)[:, 1][0])
+
+        if hasattr(self.model, "predict_proba"):
+            probability = float(self.model.predict_proba(df_input)[:, 1][0])
+        else:
+            probability = 1.0 if int(prediction) == 1 else 0.0
 
         label = "YES" if int(prediction) == 1 else "NO"
         prob_percent = round(probability * 100, 2)
