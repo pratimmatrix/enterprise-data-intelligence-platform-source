@@ -485,55 +485,219 @@ st.write("")
 
 # ============================================================
 # 9. MAIN TABBED PLATFORM INTERFACE
+# MOUSE DRAG + TOUCH SWIPE TAB NAVIGATION
 # ============================================================
 
 st.markdown("""
 <style>
 
 /* ============================================================
-   MOBILE + DESKTOP SWIPEABLE STREAMLIT TABS
+   HORIZONTAL TAB STRIP
    ============================================================ */
 
 .stTabs [data-baseweb="tab-list"] {
     display: flex !important;
     flex-wrap: nowrap !important;
+
+    width: 100% !important;
+    max-width: 100% !important;
+
     overflow-x: auto !important;
     overflow-y: hidden !important;
 
-    width: 100% !important;
-
-    -webkit-overflow-scrolling: touch !important;
-    scroll-behavior: smooth !important;
-
-    touch-action: pan-x !important;
+    white-space: nowrap !important;
 
     scrollbar-width: none !important;
+
+    -webkit-overflow-scrolling: touch !important;
+
+    cursor: grab !important;
+
+    user-select: none !important;
 }
 
 .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
     display: none !important;
 }
 
-.stTabs [data-baseweb="tab"] {
-    flex: 0 0 auto !important;
-    white-space: nowrap !important;
-    min-width: max-content !important;
-    padding: 12px 16px !important;
+.stTabs [data-baseweb="tab-list"]:active {
+    cursor: grabbing !important;
 }
 
+/* Individual tabs */
+.stTabs [data-baseweb="tab"] {
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+
+    min-width: max-content !important;
+
+    white-space: nowrap !important;
+
+    cursor: pointer !important;
+
+    padding: 12px 18px !important;
+}
+
+/* Prevent text selection while dragging */
+.stTabs [data-baseweb="tab"] * {
+    user-select: none !important;
+}
+
+/* Mobile */
 @media (max-width: 768px) {
-    .stTabs [data-baseweb="tab"] {
-        font-size: 13px !important;
-        padding: 11px 14px !important;
-    }
 
     .stTabs [data-baseweb="tab-list"] {
-        gap: 4px !important;
+        overflow-x: auto !important;
+        touch-action: pan-x !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 11px 14px !important;
+        font-size: 13px !important;
     }
 }
 
 </style>
 """, unsafe_allow_html=True)
+
+
+# ============================================================
+# MOUSE DRAG / TOUCH DRAG
+# ============================================================
+
+st.markdown("""
+<script>
+
+(function() {
+
+    function enableTabDragging() {
+
+        const tabLists = window.parent.document.querySelectorAll(
+            '.stTabs [data-baseweb="tab-list"]'
+        );
+
+        tabLists.forEach(function(slider) {
+
+            if (slider.dataset.dragEnabled === "true") {
+                return;
+            }
+
+            slider.dataset.dragEnabled = "true";
+
+            let isDown = false;
+            let startX = 0;
+            let scrollLeft = 0;
+            let moved = false;
+
+            /* ============================
+               MOUSE DOWN
+               ============================ */
+
+            slider.addEventListener("mousedown", function(e) {
+
+                isDown = true;
+                moved = false;
+
+                slider.style.cursor = "grabbing";
+
+                startX = e.pageX - slider.offsetLeft;
+                scrollLeft = slider.scrollLeft;
+
+            });
+
+            /* ============================
+               MOUSE LEAVE
+               ============================ */
+
+            slider.addEventListener("mouseleave", function() {
+
+                isDown = false;
+
+                slider.style.cursor = "grab";
+
+            });
+
+            /* ============================
+               MOUSE UP
+               ============================ */
+
+            slider.addEventListener("mouseup", function() {
+
+                isDown = false;
+
+                slider.style.cursor = "grab";
+
+            });
+
+            /* ============================
+               MOUSE MOVE
+               ============================ */
+
+            slider.addEventListener("mousemove", function(e) {
+
+                if (!isDown) {
+                    return;
+                }
+
+                e.preventDefault();
+
+                const x = e.pageX - slider.offsetLeft;
+
+                const walk = (x - startX) * 1.5;
+
+                if (Math.abs(walk) > 5) {
+                    moved = true;
+                }
+
+                slider.scrollLeft = scrollLeft - walk;
+
+            });
+
+            /* ============================
+               TOUCH START
+               ============================ */
+
+            slider.addEventListener("touchstart", function(e) {
+
+                startX = e.touches[0].pageX - slider.offsetLeft;
+
+                scrollLeft = slider.scrollLeft;
+
+            }, { passive: true });
+
+            /* ============================
+               TOUCH MOVE
+               ============================ */
+
+            slider.addEventListener("touchmove", function(e) {
+
+                const x = e.touches[0].pageX - slider.offsetLeft;
+
+                const walk = (x - startX) * 1.5;
+
+                slider.scrollLeft = scrollLeft - walk;
+
+            }, { passive: true });
+
+        });
+
+    }
+
+    /* Run after Streamlit renders */
+    setTimeout(enableTabDragging, 500);
+
+    /* Re-check because Streamlit rerenders elements */
+    setInterval(enableTabDragging, 1500);
+
+})();
+
+</script>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# TABS
+# ============================================================
 
 tabs = st.tabs([
     "📂 1. Ingestion & Pre-Flight",
