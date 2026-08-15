@@ -7,12 +7,19 @@ Orchestrates ML inference, rule-based heuristics, and business actions.
 """
 
 from typing import Dict, Any, List
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 import joblib
 
-from src.business_rules.BusinessRuleEngine import BusinessRuleEngine
-from src.insights.InsightEngine import InsightEngine
+try:
+    from src.business_rules.BusinessRuleEngine import BusinessRuleEngine
+except ImportError:
+    from src.business.business_rules import BusinessRuleEngine
+
+try:
+    from src.insights.InsightEngine import InsightEngine
+except ImportError:
+    from src.business.insight_engine import InsightEngine
 
 
 class DecisionEngine:
@@ -23,20 +30,28 @@ class DecisionEngine:
     """
 
     def __init__(self):
-        self.model_path = (
-            Path.home()
-            / "Documents"
-            / "models"
-            / "random_forest_pipeline.pkl"
-        )
+        self.project_root = Path(__file__).resolve().parent.parent.parent
         self.business_rule_engine = BusinessRuleEngine()
         self.insight_engine = InsightEngine()
         self._load_pipeline()
 
+    def _resolve_model_path(self) -> Path:
+        candidate_paths = [
+            Path.home() / "Documents" / "models" / "random_forest_pipeline.pkl",
+            self.project_root / "models" / "random_forest_pipeline.pkl",
+            self.project_root / "models" / "champion_model.pkl",
+            Path.home() / "Documents" / "models" / "champion_model.pkl",
+        ]
+        for p in candidate_paths:
+            if p.exists():
+                return p
+        return candidate_paths[0]
+
     def _load_pipeline(self):
-        if self.model_path.exists():
+        model_path = self._resolve_model_path()
+        if model_path.exists():
             try:
-                self.pipeline = joblib.load(self.model_path)
+                self.pipeline = joblib.load(model_path)
             except Exception:
                 self.pipeline = None
         else:
@@ -62,7 +77,6 @@ class DecisionEngine:
                 # 1. Predict Proba
                 if hasattr(self.pipeline, "predict_proba"):
                     probs = self.pipeline.predict_proba(df_input)
-                    # Safe unpacking whether numpy array, 1D, or 2D list
                     if hasattr(probs, "shape") and len(probs.shape) == 2 and probs.shape[1] > 1:
                         prob_percent = float(probs[0, 1]) * 100.0
                     elif len(probs) > 0 and isinstance(probs[0], (list, tuple)):
@@ -79,7 +93,6 @@ class DecisionEngine:
                     prediction_label = "NO"
 
             except Exception:
-                # Fallback if un-engineered pipeline input requested
                 pass
 
         # Adjust risk category by calculated probability
@@ -97,7 +110,7 @@ class DecisionEngine:
             "probability_percent": round(prob_percent, 2),
             "risk_category": risk_category
         }
-        
+
         try:
             business_output = self.business_rule_engine.evaluate(rule_input)
         except Exception:
@@ -152,7 +165,10 @@ class DecisionEngine:
                 )[:5]
 
                 return [
-                    {"feature": str(f[0]).replace("remainder__", "").replace("cat__", "").replace("num__", ""), "importance": float(f[1])}
+                    {
+                        "feature": str(f[0]).replace("remainder__", "").replace("cat__", "").replace("num__", ""),
+                        "importance": float(f[1])
+                    }
                     for f in sorted_features
                 ]
         except Exception:
