@@ -1,4 +1,15 @@
+"""
+Model Trainer Engine
+Enterprise Customer Intelligence Platform
+
+Author: Pratim Mistry
+Description:
+Constructs, trains, and evaluates baseline predictive models
+with leak-free preprocessing and balanced classification strategies.
+"""
+
 import logging
+from typing import Dict, Any, Tuple, Optional
 
 import pandas as pd
 
@@ -27,10 +38,11 @@ class ModelTrainer:
     TARGET_COLUMN = "y"
 
     def __init__(self):
+
         print("ModelTrainer initialized.")
 
-        self.model = None
-        self.preprocessor = None
+        self.model: Optional[Pipeline] = None
+        self.preprocessor: Optional[ColumnTransformer] = None
         self.feature_names = None
 
         self.X_train = None
@@ -42,7 +54,7 @@ class ModelTrainer:
     # PREPARE DATA
     # ============================================================
 
-    def prepare_data(self, df: pd.DataFrame):
+    def prepare_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
 
         print("\n========== MODEL DATA PREPARATION ==========")
 
@@ -62,24 +74,34 @@ class ModelTrainer:
 
         print(f"Input shape: {df.shape}")
 
-        X = df.drop(
-            columns=[self.TARGET_COLUMN]
-        ).copy()
+        # Drop target and leaky duration feature if present
+        cols_to_drop = [self.TARGET_COLUMN]
+        if "duration" in df.columns:
+            cols_to_drop.append("duration")
 
-        y = (
+        X = df.drop(columns=cols_to_drop).copy()
+
+        # Map target safely across variations
+        target_series = (
             df[self.TARGET_COLUMN]
             .astype(str)
+            .str.strip()
             .str.lower()
-            .map({
-                "no": 0,
-                "yes": 1
-            })
         )
+
+        y = target_series.map({
+            "no": 0,
+            "0": 0,
+            "false": 0,
+            "yes": 1,
+            "1": 1,
+            "true": 1
+        })
 
         if y.isna().any():
             raise ValueError(
                 "Target column contains values "
-                "other than 'yes' and 'no'."
+                "other than 'yes'/'no' or 1/0."
             )
 
         print(
@@ -97,7 +119,7 @@ class ModelTrainer:
     # BUILD PREPROCESSOR
     # ============================================================
 
-    def build_preprocessor(self, X):
+    def build_preprocessor(self, X: pd.DataFrame) -> ColumnTransformer:
 
         print("\n========== PREPROCESSING ==========")
 
@@ -138,6 +160,17 @@ class ModelTrainer:
             ]
         )
 
+        try:
+            ohe = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse_output=False
+            )
+        except TypeError:
+            ohe = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse=False
+            )
+
         categorical_pipeline = Pipeline(
             steps=[
                 (
@@ -148,9 +181,7 @@ class ModelTrainer:
                 ),
                 (
                     "encoder",
-                    OneHotEncoder(
-                        handle_unknown="ignore"
-                    )
+                    ohe
                 )
             ]
         )
@@ -167,7 +198,8 @@ class ModelTrainer:
                     categorical_pipeline,
                     categorical_features
                 )
-            ]
+            ],
+            remainder="drop"
         )
 
         return self.preprocessor
@@ -178,10 +210,10 @@ class ModelTrainer:
 
     def split_data(
         self,
-        X,
-        y,
-        test_size=0.20,
-        random_state=42
+        X: pd.DataFrame,
+        y: pd.Series,
+        test_size: float = 0.20,
+        random_state: int = 42
     ):
 
         print("\n========== TRAIN / TEST SPLIT ==========")
@@ -223,7 +255,7 @@ class ModelTrainer:
     # BUILD MODEL
     # ============================================================
 
-    def build_model(self):
+    def build_model(self) -> Pipeline:
 
         print("\n========== MODEL BUILDING ==========")
 
@@ -285,7 +317,7 @@ class ModelTrainer:
     # EVALUATION
     # ============================================================
 
-    def evaluate(self):
+    def evaluate(self) -> Dict[str, Any]:
 
         print("\n========== MODEL EVALUATION ==========")
 
@@ -387,7 +419,7 @@ class ModelTrainer:
     # COMPLETE TRAINING PIPELINE
     # ============================================================
 
-    def run(self, df):
+    def run(self, df: pd.DataFrame) -> Dict[str, Any]:
 
         print("\n")
         print("=" * 70)
