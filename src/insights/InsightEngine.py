@@ -22,7 +22,7 @@ class InsightEngine:
     ) -> List[str]:
         """
         Produce qualitative customer outreach directives.
-        Supports both 1-argument and 2-argument call signatures.
+        Supports both 1-argument and 2-argument calls safely.
         """
         insights = []
 
