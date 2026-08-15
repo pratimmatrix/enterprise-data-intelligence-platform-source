@@ -1,176 +1,144 @@
+"""
+Feature Engineering Engine
+Enterprise Customer Intelligence Platform
+
+Author: Pratim Mistry
+Description:
+Constructs domain-specific engineered features, non-linear transformations,
+and behavioral interaction indicators for campaign propensity modeling.
+"""
+
+from typing import List, Optional
 import numpy as np
 import pandas as pd
 
 
 class FeatureEngineeringEngine:
+    """
+    Orchestrates end-to-end tabular feature transformations.
+    Ensures exact feature parity between training pipelines and real-time dashboard inference.
+    """
 
     def __init__(self):
         print("FeatureEngineeringEngine initialized.")
 
     def create_features(self, df: pd.DataFrame) -> pd.DataFrame:
-
+        """
+        Transforms raw tabular customer records by computing statistical logs,
+        interaction flags, and behavioral buckets.
+        """
         print("\n========== FEATURE ENGINEERING ==========")
-
         data = df.copy()
 
         # --------------------------------------------------
-        # 1. AGE GROUP
+        # 1. AGE GROUP BUCKETING
         # --------------------------------------------------
-
-        data["age_group"] = pd.cut(
-            data["age"],
-            bins=[0, 25, 35, 45, 55, 65, np.inf],
-            labels=[
-                "young",
-                "early_adult",
-                "adult",
-                "middle_age",
-                "senior",
-                "elderly"
-            ]
-        )
-
-        print("Created feature: age_group")
+        # Segmenting age into consistent enterprise decade cohorts
+        if "age" in data.columns:
+            data["age_group"] = pd.cut(
+                data["age"],
+                bins=[-np.inf, 20, 30, 40, 50, 60, np.inf],
+                labels=["0-20", "21-30", "31-40", "41-50", "51-60", "61+"]
+            ).astype(str)
+            print("Created feature: age_group")
 
         # --------------------------------------------------
         # 2. LOG TRANSFORMATION OF BALANCE
         # --------------------------------------------------
-        # Bank balance is highly right-skewed.
-        # log1p reduces the effect of extreme values.
-
-        data["balance_log"] = np.sign(data["balance"]) * np.log1p(
-            np.abs(data["balance"])
-        )
-
-        print("Created feature: balance_log")
+        # Symmetric log-transformation handling negative & extreme balances
+        if "balance" in data.columns:
+            data["balance_log"] = np.sign(data["balance"]) * np.log1p(np.abs(data["balance"]))
+            print("Created feature: balance_log")
 
         # --------------------------------------------------
-        # 3. CAMPAIGN LOG
+        # 3. CAMPAIGN LOG TRANSFORMATION
         # --------------------------------------------------
-        # Campaign is also heavily right-skewed.
-
-        data["campaign_log"] = np.log1p(data["campaign"])
-
-        print("Created feature: campaign_log")
-
-        # --------------------------------------------------
-        # 4. PREVIOUS CONTACT FLAG
-        # --------------------------------------------------
-        # previous > 0 means the customer was contacted before.
-
-        data["previous_contact"] = (
-            data["previous"] > 0
-        ).astype(int)
-
-        print("Created feature: previous_contact")
+        # Compresses extreme right-skewed campaign contact frequency
+        if "campaign" in data.columns:
+            data["campaign_log"] = np.log1p(np.maximum(data["campaign"], 0))
+            print("Created feature: campaign_log")
 
         # --------------------------------------------------
-        # 5. PREVIOUS CONTACT DAYS FLAG
+        # 4. PREVIOUS CONTACT OCCURRENCE FLAG
         # --------------------------------------------------
-        # pdays = -1 means the customer was never contacted
-        # previously.
-
-        data["previously_contacted"] = (
-            data["pdays"] != -1
-        ).astype(int)
-
-        print("Created feature: previously_contacted")
+        # Indicates historical touchpoint presence (previous > 0)
+        if "previous" in data.columns:
+            data["previous_contact"] = (data["previous"] > 0).astype(int)
+            print("Created feature: previous_contact")
 
         # --------------------------------------------------
-        # 6. ZERO BALANCE FLAG
+        # 5. PREVIOUS CONTACT INTERVAL FLAG
         # --------------------------------------------------
-
-        data["zero_balance"] = (
-            data["balance"] == 0
-        ).astype(int)
-
-        print("Created feature: zero_balance")
+        # pdays != -1 indicates that customer was contacted in prior campaigns
+        if "pdays" in data.columns:
+            data["previously_contacted"] = (data["pdays"] != -1).astype(int)
+            print("Created feature: previously_contacted")
 
         # --------------------------------------------------
-        # 7. LOAN BURDEN
+        # 6. ZERO BALANCE LIQUIDITY FLAG
         # --------------------------------------------------
-        # Indicates whether the customer has both housing
-        # and personal loans.
-
-        data["loan_burden"] = (
-            (data["housing"] == "yes") &
-            (data["loan"] == "yes")
-        ).astype(int)
-
-        print("Created feature: loan_burden")
+        if "balance" in data.columns:
+            data["zero_balance"] = (data["balance"] == 0).astype(int)
+            print("Created feature: zero_balance")
 
         # --------------------------------------------------
-        # 8. CAMPAIGN INTENSITY
+        # 7. DUAL LOAN BURDEN INDICATOR
         # --------------------------------------------------
-        # More contacts during the current campaign may
-        # indicate repeated targeting.
-
-        data["campaign_intensity"] = pd.cut(
-            data["campaign"],
-            bins=[0, 1, 2, 4, np.inf],
-            labels=[
-                "low",
-                "moderate",
-                "high",
-                "very_high"
-            ]
-        )
-
-        print("Created feature: campaign_intensity")
+        # High financial strain flag when holding both housing & personal loans
+        if "housing" in data.columns and "loan" in data.columns:
+            data["loan_burden"] = (
+                (data["housing"].astype(str).str.lower() == "yes") &
+                (data["loan"].astype(str).str.lower() == "yes")
+            ).astype(int)
+            print("Created feature: loan_burden")
 
         # --------------------------------------------------
-        # 9. CONTACT CHANNEL QUALITY
+        # 8. CAMPAIGN INTENSITY BUCKETING
         # --------------------------------------------------
-        # Unknown contact method is explicitly represented.
-
-        data["contact_unknown"] = (
-            data["contact"] == "unknown"
-        ).astype(int)
-
-        print("Created feature: contact_unknown")
-
-        # --------------------------------------------------
-        # 10. PREVIOUS OUTCOME SUCCESS FLAG
-        # --------------------------------------------------
-
-        data["previous_success"] = (
-            data["poutcome"] == "success"
-        ).astype(int)
-
-        print("Created feature: previous_success")
+        # Categorizes touchpoint frequency to prevent customer fatigue
+        if "campaign" in data.columns:
+            data["campaign_intensity"] = pd.cut(
+                data["campaign"],
+                bins=[-np.inf, 2, 5, np.inf],
+                labels=["low", "medium", "high"]
+            ).astype(str)
+            print("Created feature: campaign_intensity")
 
         # --------------------------------------------------
-        # FEATURE SUMMARY
+        # 9. UNKNOWN CONTACT CHANNEL INDICATOR
         # --------------------------------------------------
+        if "contact" in data.columns:
+            data["contact_unknown"] = (
+                data["contact"].astype(str).str.lower() == "unknown"
+            ).astype(int)
+            print("Created feature: contact_unknown")
 
-        new_features = [
-            "age_group",
-            "balance_log",
-            "campaign_log",
-            "previous_contact",
-            "previously_contacted",
-            "zero_balance",
-            "loan_burden",
-            "campaign_intensity",
-            "contact_unknown",
-            "previous_success"
+        # --------------------------------------------------
+        # 10. HISTORICAL CAMPAIGN SUCCESS FLAG
+        # --------------------------------------------------
+        if "poutcome" in data.columns:
+            data["previous_success"] = (
+                data["poutcome"].astype(str).str.lower() == "success"
+            ).astype(int)
+            print("Created feature: previous_success")
+
+        # --------------------------------------------------
+        # SUMMARY LOGGING
+        # --------------------------------------------------
+        new_features: List[str] = [
+            "age_group", "balance_log", "campaign_log", "previous_contact",
+            "previously_contacted", "zero_balance", "loan_burden",
+            "campaign_intensity", "contact_unknown", "previous_success"
         ]
 
-        print("\n---------- CREATED FEATURES ----------")
+        active_created = [f for f in new_features if f in data.columns]
 
-        for feature in new_features:
+        print("\n---------- CREATED FEATURES ----------")
+        for feature in active_created:
             print(f"• {feature}")
 
-        print(
-            f"\nOriginal columns : {df.shape[1]}"
-        )
-
-        print(
-            f"New columns      : {data.shape[1]}"
-        )
-
-        print(
-            f"Features created : {len(new_features)}"
-        )
+        print(f"\nOriginal columns : {df.shape[1]}")
+        print(f"New columns      : {data.shape[1]}")
+        print(f"Features created : {len(active_created)}")
 
         return data
