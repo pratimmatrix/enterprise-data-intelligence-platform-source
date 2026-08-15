@@ -1,5 +1,16 @@
+"""
+Model Comparator Engine
+Enterprise Customer Intelligence Platform
+
+Author: Pratim Mistry
+Description:
+Trains, benchmarks, and evaluates competitive machine learning architectures
+(Logistic Regression, Random Forest, Gradient Boosting) using cross-validated metrics.
+"""
+
 import logging
 from pathlib import Path
+from typing import Dict, Any, Tuple
 
 import joblib
 import pandas as pd
@@ -48,16 +59,17 @@ class ModelComparator:
         # PROJECT MODEL DIRECTORY
         # ====================================================
 
-        # This points to:
-        #
-        # enterprise-data-intelligence-platform/models
-        #
+        # Dynamically locate project root models directory
+        current_path = Path(__file__).resolve()
+        
+        # Check parent depths to find project root directory
+        root_dir = current_path.parent
+        for _ in range(4):
+            if (root_dir / "models").exists() or (root_dir / "src").exists():
+                break
+            root_dir = root_dir.parent
 
-        self.model_directory = (
-            Path(__file__).resolve()
-            .parents[3]
-            / "models"
-        )
+        self.model_directory = root_dir / "models"
 
         self.model_directory.mkdir(
             parents=True,
@@ -76,7 +88,7 @@ class ModelComparator:
     def prepare_data(
         self,
         df: pd.DataFrame
-    ):
+    ) -> Tuple[pd.DataFrame, pd.Series]:
 
         print(
             "\n========== MODEL COMPARISON DATA PREPARATION =========="
@@ -109,25 +121,30 @@ class ModelComparator:
         # Separate features and target
         # ----------------------------------------------------
 
-        X = df.drop(
-            columns=[
-                self.TARGET_COLUMN,
-                "duration"
-            ]
-        ).copy()
+        # Safely drop target and leaky duration feature if present
+        cols_to_drop = [self.TARGET_COLUMN]
+        if "duration" in df.columns:
+            cols_to_drop.append("duration")
 
-        y = (
-            df[
-                self.TARGET_COLUMN
-            ]
+        X = df.drop(columns=cols_to_drop).copy()
+
+        # Map binary target values safely
+        target_series = (
+            df[self.TARGET_COLUMN]
             .astype(str)
+            .str.strip()
             .str.lower()
-            .map(
-                {
-                    "no": 0,
-                    "yes": 1
-                }
-            )
+        )
+
+        y = target_series.map(
+            {
+                "no": 0,
+                "0": 0,
+                "false": 0,
+                "yes": 1,
+                "1": 1,
+                "true": 1
+            }
         )
 
         if y.isna().any():
@@ -135,7 +152,7 @@ class ModelComparator:
             raise ValueError(
                 "Target column contains "
                 "values other than "
-                "'yes' and 'no'."
+                "'yes'/'no' or 1/0."
             )
 
         print(
@@ -159,8 +176,8 @@ class ModelComparator:
 
     def build_preprocessor(
         self,
-        X
-    ):
+        X: pd.DataFrame
+    ) -> ColumnTransformer:
 
         print(
             "\n========== BUILDING PREPROCESSOR =========="
@@ -219,6 +236,17 @@ class ModelComparator:
         # Categorical pipeline
         # ----------------------------------------------------
 
+        try:
+            ohe = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse_output=False
+            )
+        except TypeError:
+            ohe = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse=False
+            )
+
         categorical_pipeline = Pipeline(
             steps=[
                 (
@@ -229,9 +257,7 @@ class ModelComparator:
                 ),
                 (
                     "encoder",
-                    OneHotEncoder(
-                        handle_unknown="ignore"
-                    )
+                    ohe
                 )
             ]
         )
@@ -252,7 +278,8 @@ class ModelComparator:
                     categorical_pipeline,
                     categorical_features
                 )
-            ]
+            ],
+            remainder="drop"
         )
 
         return preprocessor
@@ -263,8 +290,8 @@ class ModelComparator:
 
     def build_models(
         self,
-        preprocessor
-    ):
+        preprocessor: ColumnTransformer
+    ) -> Dict[str, Pipeline]:
 
         print(
             "\n========== BUILDING MODELS =========="
@@ -345,13 +372,13 @@ class ModelComparator:
 
     def evaluate_model(
         self,
-        name,
-        model,
-        X_train,
-        X_test,
-        y_train,
-        y_test
-    ):
+        name: str,
+        model: Pipeline,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series
+    ) -> Tuple[Pipeline, Dict[str, Any]]:
 
         print()
 
@@ -473,11 +500,10 @@ class ModelComparator:
 
     def save_model(
         self,
-        model_name,
-        model
-    ):
+        model_name: str,
+        model: Any
+    ) -> Path:
 
-        # Convert model name into safe filename
         filename = (
             model_name
             .lower()
@@ -505,7 +531,7 @@ class ModelComparator:
     # SAVE ALL TRAINED MODELS
     # ========================================================
 
-    def save_all_models(self):
+    def save_all_models(self) -> Dict[str, Path]:
 
         print()
 
@@ -546,10 +572,10 @@ class ModelComparator:
 
     def run(
         self,
-        df,
-        test_size=0.20,
-        random_state=42
-    ):
+        df: pd.DataFrame,
+        test_size: float = 0.20,
+        random_state: int = 42
+    ) -> Dict[str, Any]:
 
         print()
 
