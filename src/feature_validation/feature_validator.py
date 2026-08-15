@@ -41,6 +41,7 @@ class FeatureValidator:
     ]
 
     def __init__(self):
+
         print("FeatureValidator initialized.")
 
     def validate(self, df: pd.DataFrame) -> bool:
@@ -110,11 +111,14 @@ class FeatureValidator:
 
         for feature in self.BINARY_FEATURES:
 
-            values = set(
-                df[feature]
-                .dropna()
-                .unique()
-            )
+            # Drop missing values and extract distinct set
+            unique_vals = df[feature].dropna().unique()
+
+            # Normalize values to integer representations for safety
+            try:
+                values = {int(v) for v in unique_vals}
+            except (ValueError, TypeError):
+                values = set(unique_vals)
 
             invalid_values = values - {0, 1}
 
@@ -127,7 +131,7 @@ class FeatureValidator:
 
             print(
                 f"{feature:<25} "
-                f"values={sorted(values)}"
+                f"values={sorted(list(values))}"
             )
 
         # --------------------------------------------------
@@ -138,9 +142,7 @@ class FeatureValidator:
 
         for feature in self.NUMERIC_FEATURES:
 
-            if not pd.api.types.is_numeric_dtype(
-                df[feature]
-            ):
+            if not pd.api.types.is_numeric_dtype(df[feature]):
 
                 raise TypeError(
                     f"{feature} must be numeric."
@@ -148,9 +150,7 @@ class FeatureValidator:
 
             nan_count = df[feature].isna().sum()
 
-            inf_count = np.isinf(
-                df[feature]
-            ).sum()
+            inf_count = np.isinf(df[feature]).sum()
 
             if nan_count > 0:
 
