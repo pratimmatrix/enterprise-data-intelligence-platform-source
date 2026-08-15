@@ -10,7 +10,7 @@ Enables schema provenance, tracks evolutionary changes, and provides baseline si
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 import pandas as pd
 
 
@@ -19,8 +19,21 @@ class SchemaRegistry:
     Persists and retrieves dataset schema definitions across version cycles.
     """
 
-    def __init__(self, schemas_directory: str = "data/schemas"):
-        self.schemas_dir = Path(schemas_directory)
+    def __init__(self, schemas_directory: Union[str, Path] = "data/schemas"):
+        # Dynamically discover project root if relative path is passed
+        current_path = Path(__file__).resolve()
+        root_dir = current_path.parent
+        for _ in range(4):
+            if (root_dir / "src").exists() or (root_dir / "data").exists():
+                break
+            root_dir = root_dir.parent
+
+        candidate_dir = Path(schemas_directory)
+        if candidate_dir.is_absolute():
+            self.schemas_dir = candidate_dir
+        else:
+            self.schemas_dir = root_dir / candidate_dir
+
         self.schemas_dir.mkdir(parents=True, exist_ok=True)
         self.registry_file = self.schemas_dir / "schema_versions.json"
 
@@ -28,6 +41,17 @@ class SchemaRegistry:
         """
         Extract detailed architectural signature of a dataframe.
         """
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return {
+                "total_columns": 0,
+                "feature_count": 0,
+                "numeric_features": [],
+                "categorical_features": [],
+                "categorical_levels": {},
+                "column_dtypes": {},
+                "target_column": target_column
+            }
+
         numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
         categorical_cols = df.select_dtypes(exclude=["number"]).columns.tolist()
 
@@ -100,8 +124,15 @@ class SchemaRegistry:
                 "versions": []
             }
 
-        with open(self.registry_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(self.registry_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {
+                "active_version": None,
+                "active_fingerprint": None,
+                "versions": []
+            }
 
     def get_active_schema(self) -> Optional[Dict[str, Any]]:
         """
