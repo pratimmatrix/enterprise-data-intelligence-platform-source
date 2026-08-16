@@ -1,0 +1,508 @@
+{
+    "active_version": "v1.0",
+    "active_fingerprint": {
+        "total_columns": 17,
+        "feature_count": 16,
+        "numeric_features": [
+            "age",
+            "balance",
+            "campaign",
+            "day",
+            "duration",
+            "pdays",
+            "previous"
+        ],
+        "categorical_features": [
+            "contact",
+            "default",
+            "education",
+            "housing",
+            "job",
+            "loan",
+            "marital",
+            "month",
+            "poutcome"
+        ],
+        "categorical_levels": {
+            "job": [
+                "admin.",
+                "blue-collar",
+                "entrepreneur",
+                "housemaid",
+                "management",
+                "retired",
+                "self-employed",
+                "services",
+                "student",
+                "technician",
+                "unemployed",
+                "unknown"
+            ],
+            "marital": [
+                "divorced",
+                "married",
+                "single"
+            ],
+            "education": [
+                "primary",
+                "secondary",
+                "tertiary",
+                "unknown"
+            ],
+            "default": [
+                "no",
+                "yes"
+            ],
+            "housing": [
+                "no",
+                "yes"
+            ],
+            "loan": [
+                "no",
+                "yes"
+            ],
+            "contact": [
+                "cellular",
+                "telephone",
+                "unknown"
+            ],
+            "month": [
+                "apr",
+                "aug",
+                "dec",
+                "feb",
+                "jan",
+                "jul",
+                "jun",
+                "mar",
+                "may",
+                "nov",
+                "oct",
+                "sep"
+            ],
+            "poutcome": [
+                "failure",
+                "other",
+                "success",
+                "unknown"
+            ]
+        },
+        "column_dtypes": {
+            "age": "int64",
+            "job": "object",
+            "marital": "object",
+            "education": "object",
+            "default": "object",
+            "balance": "int64",
+            "housing": "object",
+            "loan": "object",
+            "contact": "object",
+            "day": "int64",
+            "month": "object",
+            "duration": "int64",
+            "campaign": "int64",
+            "pdays": "int64",
+            "previous": "int64",
+            "poutcome": "object",
+            "y": "object"
+        },
+        "target_column": "y"
+    },
+    "versions": [
+        {
+            "version": "v2.0",
+            "created_at": "2026-08-15T13:07:50.513787",
+            "notes": "Champion: logistic_regression",
+            "fingerprint": {
+                "total_columns": 18,
+                "feature_count": 17,
+                "numeric_features": [
+                    "age",
+                    "annual_income",
+                    "balance",
+                    "campaign",
+                    "credit_score",
+                    "day",
+                    "duration",
+                    "previous"
+                ],
+                "categorical_features": [
+                    "contact",
+                    "default",
+                    "education",
+                    "housing",
+                    "job",
+                    "loan",
+                    "marital",
+                    "month",
+                    "poutcome"
+                ],
+                "categorical_levels": {
+                    "job": [
+                        "admin.",
+                        "blue-collar",
+                        "entrepreneur",
+                        "management",
+                        "retired",
+                        "services",
+                        "technician"
+                    ],
+                    "marital": [
+                        "divorced",
+                        "married",
+                        "single"
+                    ],
+                    "education": [
+                        "primary",
+                        "secondary",
+                        "tertiary",
+                        "unknown"
+                    ],
+                    "default": [
+                        "no",
+                        "yes"
+                    ],
+                    "housing": [
+                        "no",
+                        "yes"
+                    ],
+                    "loan": [
+                        "no",
+                        "yes"
+                    ],
+                    "contact": [
+                        "unknown"
+                    ],
+                    "month": [
+                        "may"
+                    ],
+                    "poutcome": [
+                        "unknown"
+                    ]
+                },
+                "column_dtypes": {
+                    "age": "int64",
+                    "job": "object",
+                    "marital": "object",
+                    "education": "object",
+                    "default": "object",
+                    "balance": "int64",
+                    "housing": "object",
+                    "loan": "object",
+                    "contact": "object",
+                    "day": "int64",
+                    "month": "object",
+                    "duration": "int64",
+                    "campaign": "int64",
+                    "previous": "int64",
+                    "poutcome": "object",
+                    "credit_score": "int64",
+                    "annual_income": "float64",
+                    "y": "object"
+                },
+                "target_column": "y"
+            }
+        },
+        {
+            "version": "v3.0",
+            "created_at": "2026-08-15T13:08:29.092241",
+            "notes": "Champion: logistic_regression",
+            "fingerprint": {
+                "total_columns": 18,
+                "feature_count": 17,
+                "numeric_features": [
+                    "age",
+                    "annual_income",
+                    "balance",
+                    "campaign",
+                    "credit_score",
+                    "day",
+                    "duration",
+                    "previous"
+                ],
+                "categorical_features": [
+                    "contact",
+                    "default",
+                    "education",
+                    "housing",
+                    "job",
+                    "loan",
+                    "marital",
+                    "month",
+                    "poutcome"
+                ],
+                "categorical_levels": {
+                    "job": [
+                        "admin.",
+                        "blue-collar",
+                        "entrepreneur",
+                        "management",
+                        "retired",
+                        "services",
+                        "technician"
+                    ],
+                    "marital": [
+                        "divorced",
+                        "married",
+                        "single"
+                    ],
+                    "education": [
+                        "primary",
+                        "secondary",
+                        "tertiary",
+                        "unknown"
+                    ],
+                    "default": [
+                        "no",
+                        "yes"
+                    ],
+                    "housing": [
+                        "no",
+                        "yes"
+                    ],
+                    "loan": [
+                        "no",
+                        "yes"
+                    ],
+                    "contact": [
+                        "unknown"
+                    ],
+                    "month": [
+                        "may"
+                    ],
+                    "poutcome": [
+                        "unknown"
+                    ]
+                },
+                "column_dtypes": {
+                    "age": "int64",
+                    "job": "object",
+                    "marital": "object",
+                    "education": "object",
+                    "default": "object",
+                    "balance": "int64",
+                    "housing": "object",
+                    "loan": "object",
+                    "contact": "object",
+                    "day": "int64",
+                    "month": "object",
+                    "duration": "int64",
+                    "campaign": "int64",
+                    "previous": "int64",
+                    "poutcome": "object",
+                    "credit_score": "int64",
+                    "annual_income": "float64",
+                    "y": "object"
+                },
+                "target_column": "y"
+            }
+        },
+        {
+            "version": "v4.0",
+            "created_at": "2026-08-15T14:59:26.366926",
+            "notes": "Champion: logistic_regression",
+            "fingerprint": {
+                "total_columns": 18,
+                "feature_count": 17,
+                "numeric_features": [
+                    "age",
+                    "annual_income",
+                    "balance",
+                    "campaign",
+                    "credit_score",
+                    "day",
+                    "duration",
+                    "previous"
+                ],
+                "categorical_features": [
+                    "contact",
+                    "default",
+                    "education",
+                    "housing",
+                    "job",
+                    "loan",
+                    "marital",
+                    "month",
+                    "poutcome"
+                ],
+                "categorical_levels": {
+                    "job": [
+                        "admin.",
+                        "blue-collar",
+                        "entrepreneur",
+                        "management",
+                        "retired",
+                        "services",
+                        "technician"
+                    ],
+                    "marital": [
+                        "divorced",
+                        "married",
+                        "single"
+                    ],
+                    "education": [
+                        "primary",
+                        "secondary",
+                        "tertiary",
+                        "unknown"
+                    ],
+                    "default": [
+                        "no",
+                        "yes"
+                    ],
+                    "housing": [
+                        "no",
+                        "yes"
+                    ],
+                    "loan": [
+                        "no",
+                        "yes"
+                    ],
+                    "contact": [
+                        "unknown"
+                    ],
+                    "month": [
+                        "may"
+                    ],
+                    "poutcome": [
+                        "unknown"
+                    ]
+                },
+                "column_dtypes": {
+                    "age": "int64",
+                    "job": "object",
+                    "marital": "object",
+                    "education": "object",
+                    "default": "object",
+                    "balance": "int64",
+                    "housing": "object",
+                    "loan": "object",
+                    "contact": "object",
+                    "day": "int64",
+                    "month": "object",
+                    "duration": "int64",
+                    "campaign": "int64",
+                    "previous": "int64",
+                    "poutcome": "object",
+                    "credit_score": "int64",
+                    "annual_income": "float64",
+                    "y": "object"
+                },
+                "target_column": "y"
+            }
+        },
+        {
+            "version": "v1.0",
+            "created_at": "2026-08-15T14:59:46.709219",
+            "notes": "Original Verified Baseline",
+            "fingerprint": {
+                "total_columns": 17,
+                "feature_count": 16,
+                "numeric_features": [
+                    "age",
+                    "balance",
+                    "campaign",
+                    "day",
+                    "duration",
+                    "pdays",
+                    "previous"
+                ],
+                "categorical_features": [
+                    "contact",
+                    "default",
+                    "education",
+                    "housing",
+                    "job",
+                    "loan",
+                    "marital",
+                    "month",
+                    "poutcome"
+                ],
+                "categorical_levels": {
+                    "job": [
+                        "admin.",
+                        "blue-collar",
+                        "entrepreneur",
+                        "housemaid",
+                        "management",
+                        "retired",
+                        "self-employed",
+                        "services",
+                        "student",
+                        "technician",
+                        "unemployed",
+                        "unknown"
+                    ],
+                    "marital": [
+                        "divorced",
+                        "married",
+                        "single"
+                    ],
+                    "education": [
+                        "primary",
+                        "secondary",
+                        "tertiary",
+                        "unknown"
+                    ],
+                    "default": [
+                        "no",
+                        "yes"
+                    ],
+                    "housing": [
+                        "no",
+                        "yes"
+                    ],
+                    "loan": [
+                        "no",
+                        "yes"
+                    ],
+                    "contact": [
+                        "cellular",
+                        "telephone",
+                        "unknown"
+                    ],
+                    "month": [
+                        "apr",
+                        "aug",
+                        "dec",
+                        "feb",
+                        "jan",
+                        "jul",
+                        "jun",
+                        "mar",
+                        "may",
+                        "nov",
+                        "oct",
+                        "sep"
+                    ],
+                    "poutcome": [
+                        "failure",
+                        "other",
+                        "success",
+                        "unknown"
+                    ]
+                },
+                "column_dtypes": {
+                    "age": "int64",
+                    "job": "object",
+                    "marital": "object",
+                    "education": "object",
+                    "default": "object",
+                    "balance": "int64",
+                    "housing": "object",
+                    "loan": "object",
+                    "contact": "object",
+                    "day": "int64",
+                    "month": "object",
+                    "duration": "int64",
+                    "campaign": "int64",
+                    "pdays": "int64",
+                    "previous": "int64",
+                    "poutcome": "object",
+                    "y": "object"
+                },
+                "target_column": "y"
+            }
+        }
+    ]
+}

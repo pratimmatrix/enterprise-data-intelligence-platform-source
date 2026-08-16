@@ -1,1166 +1,688 @@
-# ============================================================
-# ENTERPRISE DATA & DECISION INTELLIGENCE PLATFORM
-# COMPLETE ENTERPRISE PRODUCTION DASHBOARD (app.py)
-# ============================================================
-# Author: Pratim Mistry
-# Architecture: Full End-to-End Enterprise Modular Architecture
-# ============================================================
-
-import sys
+import io
 import os
-import hmac
+import sys
 import json
+import hmac
+import time
+import hashlib
 import logging
 import traceback
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Union
+from datetime import datetime
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import streamlit as st
+import joblib
 
-# ============================================================
-# 1. ROOT PATH SETUP & PYTHON PATH RESOLUTION
-# ============================================================
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier, HistGradientBoostingClassifier, AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+ROOT = Path(__file__).resolve().parent
+MODELS = ROOT / "models" / "artifacts"
+REGISTRY = ROOT / "models" / "registry"
+LOGS = ROOT / "logs"
+MODELS.mkdir(parents=True, exist_ok=True)
+REGISTRY.mkdir(parents=True, exist_ok=True)
+LOGS.mkdir(parents=True, exist_ok=True)
 
-# ============================================================
-# 2. LOGGING CONFIGURATION
-# ============================================================
+LOG_FILE = LOGS / "enterprise_platform.log"
+logger = logging.getLogger("EnterprisePlatform")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+if not logger.handlers:
+    fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    fh.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+    logger.addHandler(fh)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-)
-logger = logging.getLogger("EnterpriseApp")
+try:
+    from xgboost import XGBClassifier
+except Exception:
+    XGBClassifier = None
+try:
+    from lightgbm import LGBMClassifier
+except Exception:
+    LGBMClassifier = None
+try:
+    from catboost import CatBoostClassifier
+except Exception:
+    CatBoostClassifier = None
 
-# ============================================================
-# 3. PAGE CONFIGURATION & ENTERPRISE CSS THEME
-# ============================================================
-
-st.set_page_config(
-    page_title="Enterprise Data Intelligence Platform",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Enterprise Data Intelligence Platform", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
-    .main-title-text {
-        font-size: 2.35rem;
-        font-weight: 800;
-        color: #0f172a;
-        letter-spacing: -0.8px;
-        margin-bottom: 2px;
-    }
-    .main-subtitle-text {
-        font-size: 1.05rem;
-        color: #475569;
-        margin-bottom: 1.8rem;
-    }
-    .section-ribbon {
-        background: linear-gradient(90deg, #1e293b 0%, #334155 100%);
-        color: #ffffff;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 1.05rem;
-        margin-top: 18px;
-        margin-bottom: 15px;
-    }
-    .kpi-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 18px 22px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-    }
-    .kpi-title {
-        font-size: 0.80rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #64748b;
-        letter-spacing: 0.6px;
-    }
-    .kpi-val {
-        font-size: 1.85rem;
-        font-weight: 800;
-        color: #0f172a;
-        margin-top: 4px;
-    }
-    .gate-promoted-card {
-        background-color: #f0fdf4;
-        border: 2px solid #22c55e;
-        border-radius: 8px;
-        padding: 22px;
-        color: #15803d;
-        margin-top: 15px;
-    }
-    .gate-rejected-card {
-        background-color: #fef2f2;
-        border: 2px solid #ef4444;
-        border-radius: 8px;
-        padding: 22px;
-        color: #b91c1c;
-        margin-top: 15px;
-    }
-    .terminal-logs {
-        background-color: #0f172a;
-        color: #38bdf8;
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.82rem;
-        padding: 15px;
-        border-radius: 6px;
-        height: 240px;
-        overflow-y: auto;
-    }
+/* ===================== HIGH-CONTRAST DARK ENTERPRISE UI ===================== */
+:root{
+  --bg:#0b0f14;
+  --surface:#111820;
+  --surface-2:#17212b;
+  --surface-3:#1d2935;
+  --border:#334352;
+  --border-soft:#263442;
+  --text:#f8fafc;
+  --text-2:#e2e8f0;
+  --muted:#a8b5c3;
+  --accent:#38bdf8;
+  --accent-2:#818cf8;
+  --good:#34d399;
+  --warn:#fbbf24;
+  --bad:#fb7185;
+}
+
+/* App background */
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"]{background:var(--bg)!important;color:var(--text)!important}
+[data-testid="stHeader"]{background:#0b0f14!important}
+[data-testid="stToolbar"]{background:transparent!important}
+.block-container{max-width:1500px!important;padding-top:1.5rem!important;padding-bottom:3rem!important}
+
+/* Sidebar */
+[data-testid="stSidebar"],
+[data-testid="stSidebarContent"]{background:#0d141b!important;border-right:1px solid var(--border-soft)!important}
+[data-testid="stSidebar"] *{color:var(--text-2)!important}
+[data-testid="stSidebar"] hr{border-color:var(--border)!important}
+
+/* Global typography - explicit colors so headings can NEVER disappear */
+.stMarkdown,.stMarkdown p,.stMarkdown span,.stMarkdown li,
+[data-testid="stText"],label,p{color:var(--text-2)!important}
+.stMarkdown h1,.stMarkdown h2,.stMarkdown h3,.stMarkdown h4,
+.stMarkdown h5,.stMarkdown h6,
+h1,h2,h3,h4,h5,h6{color:#ffffff!important;font-weight:800!important}
+.main-title{font-size:2.35rem!important;font-weight:900!important;letter-spacing:-.7px;color:#ffffff!important}
+.subtitle{color:#b8c5d1!important;margin-bottom:1rem}
+.small{font-size:.78rem;color:#a8b5c3!important;text-transform:uppercase;font-weight:800}
+.big{font-size:1.65rem;font-weight:900;color:#ffffff!important}
+
+/* Seven section ribbons - strong contrast */
+.ribbon{
+  background:#172b3a!important;
+  color:#ffffff!important;
+  padding:13px 18px;
+  border:1px solid #3b82a6;
+  border-left:4px solid var(--accent);
+  border-radius:9px;
+  font-weight:850;
+  font-size:1.05rem;
+  margin:8px 0 14px;
+  box-shadow:0 4px 18px rgba(0,0,0,.28);
+}
+.ribbon *{color:#ffffff!important}
+
+/* Cards */
+.card{
+  background:var(--surface)!important;
+  color:var(--text-2)!important;
+  border:1px solid var(--border)!important;
+  border-radius:12px;
+  padding:16px;
+  box-shadow:0 4px 16px rgba(0,0,0,.22)
+}
+.card *{color:var(--text-2)!important}
+.good{background:#0b211b!important;border:1px solid #238c6b!important;border-radius:10px;padding:15px;color:#d1fae5!important}
+.good *{color:#d1fae5!important}
+.bad{background:#29151a!important;border:1px solid #b94a5b!important;border-radius:10px;padding:15px;color:#ffe4e6!important}
+.bad *{color:#ffe4e6!important}
+.warn{background:#2a210d!important;border:1px solid #a87816!important;border-radius:10px;padding:15px;color:#fef3c7!important}
+.warn *{color:#fef3c7!important}
+.logbox{background:#080c11!important;color:#67d7ff!important;border:1px solid #29455a;padding:12px;border-radius:8px;height:220px;overflow:auto;white-space:pre-wrap}
+
+/* Tabs: readable in both selected/unselected states */
+button[data-baseweb="tab"]{color:#b7c4d0!important;background:transparent!important;font-weight:700!important}
+button[data-baseweb="tab"] p{color:inherit!important}
+button[data-baseweb="tab"][aria-selected="true"]{color:#ffffff!important;background:#172b3a!important;border-radius:7px 7px 0 0}
+button[data-baseweb="tab"][aria-selected="true"] p{color:#ffffff!important}
+div[data-baseweb="tab-highlight"]{background:#38bdf8!important;height:3px!important}
+
+/* Inputs */
+.stTextInput label,.stNumberInput label,.stTextArea label,.stSelectbox label,
+.stMultiSelect label,.stFileUploader label,.stRadio label,.stCheckbox label,
+.stDateInput label,.stTimeInput label{color:#e2e8f0!important;font-weight:700!important}
+.stTextInput input,.stNumberInput input,.stTextArea textarea,.stDateInput input,.stTimeInput input{
+  background:#111820!important;color:#ffffff!important;border:1px solid #40515f!important;border-radius:8px!important
+}
+.stTextInput input::placeholder,.stTextArea textarea::placeholder{color:#81909e!important}
+[data-baseweb="select"]>div{background:#111820!important;color:#ffffff!important;border-color:#40515f!important}
+[data-baseweb="select"] span{color:#ffffff!important}
+[data-baseweb="popover"],[data-baseweb="menu"]{background:#151e27!important;border:1px solid #40515f!important}
+[data-baseweb="menu"] *{color:#ffffff!important}
+[data-baseweb="option"]{background:#151e27!important;color:#ffffff!important}
+[data-baseweb="option"]:hover{background:#243545!important}
+.stFileUploader{background:#111820!important;border:1px dashed #4c9dcc!important;border-radius:10px;padding:8px}
+.stFileUploader section{background:transparent!important}
+.stFileUploader *{color:#e2e8f0!important}
+
+/* Buttons */
+.stButton>button,.stDownloadButton>button{
+  background:#173247!important;color:#ffffff!important;border:1px solid #4b9dcc!important;
+  border-radius:8px!important;font-weight:750!important
+}
+.stButton>button p,.stDownloadButton>button p{color:#ffffff!important}
+.stButton>button:hover,.stDownloadButton>button:hover{background:#21465f!important;border-color:#7dd3fc!important;color:#ffffff!important}
+.stButton>button:disabled{background:#202a33!important;color:#7f8c98!important;border-color:#37434e!important}
+
+/* Metrics */
+div[data-testid="stMetric"]{background:var(--surface)!important;border:1px solid var(--border)!important;padding:12px;border-radius:10px;box-shadow:0 3px 12px rgba(0,0,0,.18)}
+div[data-testid="stMetricLabel"]{color:#aebbc8!important}
+div[data-testid="stMetricLabel"] *{color:#aebbc8!important}
+div[data-testid="stMetricValue"]{color:#ffffff!important}
+div[data-testid="stMetricValue"] *{color:#ffffff!important}
+div[data-testid="stMetricDelta"] *{color:#dbe5ee!important}
+
+/* Tables/dataframes */
+div[data-testid="stDataFrame"]{background:#111820!important;border:1px solid var(--border)!important;border-radius:8px;overflow:hidden}
+[data-testid="stDataFrame"] iframe{background:#111820!important}
+
+/* Alerts */
+div[data-testid="stAlert"]{background:#151e27!important;border:1px solid #40515f!important;color:#f1f5f9!important}
+div[data-testid="stAlert"] *{color:#f1f5f9!important}
+
+/* Expanders */
+details{background:#111820!important;border:1px solid var(--border)!important;border-radius:10px!important}
+details summary,details summary *{color:#ffffff!important;font-weight:700!important}
+
+/* Progress */
+div[data-testid="stProgressBar"]>div{background:#26333f!important}
+
+/* Links */
+a{color:#7dd3fc!important}
+a:hover{color:#bae6fd!important}
+
+/* Horizontal rule */
+hr{border-color:#334352!important}
+
+/* Scrollbars */
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:#0b0f14}
+::-webkit-scrollbar-thumb{background:#3b4b59;border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:#526575}
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# 4. DIRECT EXACT REPO IMPORTS WITH SAFE ZERO-CRASH FALLBACKS
-# ============================================================
 
-try:
-    from src.ingestion.loader import DataLoader
-except Exception:
-    DataLoader = None
+def log(message, level="INFO"):
+    line = f"{datetime.now():%Y-%m-%d %H:%M:%S} | {level.upper():<7} | {message}"
+    getattr(logger, level.lower(), logger.info)(message)
+    st.session_state.setdefault("logs", []).append(line)
+    st.session_state.logs = st.session_state.logs[-300:]
 
-try:
-    from src.ingestion.validator import DataValidator
-except Exception:
-    DataValidator = None
 
-try:
-    from src.profiling.profiler import DataProfiler
-except Exception:
-    DataProfiler = None
+def read_csv_bytes(data):
+    last_error = None
+    for enc in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            text = data.decode(enc)
+            break
+        except Exception as e:
+            last_error = e
+    else:
+        raise ValueError(f"CSV encoding could not be detected: {last_error}")
+    sample = text[:20000]
+    counts = {sep: sample.count(sep) for sep in [",", ";", "\t", "|"]}
+    sep = max(counts, key=counts.get)
+    df = pd.read_csv(io.StringIO(text), sep=sep)
+    if df.shape[1] < 2:
+        raise ValueError("CSV must contain at least two columns.")
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
 
-try:
-    from src.profiling.quality import DataQualityEngine
-except Exception:
-    DataQualityEngine = None
 
-try:
-    from src.profiling.relationships import RelationshipAnalyzer
-except Exception:
-    RelationshipAnalyzer = None
+def default_bank_path():
+    for p in [ROOT/"bank-full.csv", ROOT/"bank.csv", ROOT/"data"/"bank-full.csv", ROOT/"data"/"bank.csv", ROOT/"data"/"raw"/"bank-full.csv", ROOT/"data"/"raw"/"bank.csv"]:
+        if p.exists():
+            return p
+    return None
 
-try:
-    from src.profiling.statistics import StatisticalAnalyzer
-except Exception:
-    StatisticalAnalyzer = None
-
-try:
-    from src.profiling.semantic import SemanticAnalyzer
-except Exception:
-    SemanticAnalyzer = None
-
-try:
-    from src.profiling.anomalies import AnomalyEngine
-except Exception:
-    AnomalyEngine = None
-
-try:
-    from src.feature_engineering.feature_engineer import FeatureEngineeringEngine
-except Exception:
-    FeatureEngineeringEngine = None
-
-try:
-    from src.feature_validation.feature_validator import FeatureValidator
-except Exception:
-    FeatureValidator = None
-
-try:
-    from src.schema.schema_registry import SchemaRegistry
-except Exception:
-    SchemaRegistry = None
-
-try:
-    from src.schema.schema_comparator import SchemaComparator
-except Exception:
-    SchemaComparator = None
-
-try:
-    from src.training.adaptive_trainer import AdaptiveModelTrainer
-except Exception:
-    AdaptiveModelTrainer = None
-
-try:
-    from src.training.quality_gate import QualityGateEngine, QualityGateDecision
-except Exception:
-    QualityGateEngine = None
-    QualityGateDecision = None
-
-try:
-    from src.validation.target_integrity import TargetIntegrityEngine, TargetIntegrityError
-except Exception:
-    TargetIntegrityEngine = None
-    TargetIntegrityError = Exception
-
-try:
-    from src.auth.auth_manager import AuthManager
-except Exception:
-    AuthManager = None
-
-# ============================================================
-# 5. DATA INGESTION & DATASET DISCOVERY
-# ============================================================
 
 @st.cache_data(show_spinner=False)
-def load_default_bank_dataset() -> pd.DataFrame:
-    """
-    Search standard repository directories for bank-full.csv.
-    Fallback to generating high-fidelity dataset if absent.
-    """
-    search_paths = [
-        PROJECT_ROOT / "bank-full.csv",
-        PROJECT_ROOT / "data" / "bank-full.csv",
-        PROJECT_ROOT / "data" / "raw" / "bank-full.csv"
-    ]
-    for sp in search_paths:
-        if sp.exists():
-            try:
-                df = pd.read_csv(sp, sep=";")
-                if len(df.columns) > 1:
-                    return df
-            except Exception:
-                try:
-                    df = pd.read_csv(sp, sep=",")
-                    if len(df.columns) > 1:
-                        return df
-                except Exception:
-                    pass
+def load_default():
+    p = default_bank_path()
+    if p is None:
+        raise FileNotFoundError("bank-full.csv was not found. Put the real bank CSV in the project root, data/, or data/raw/.")
+    return read_csv_bytes(p.read_bytes()), str(p)
 
-    np.random.seed(42)
-    sample_size = 4521
-    jobs = ["management", "technician", "entrepreneur", "blue-collar", "retired", "admin.", "services", "self-employed", "unemployed", "housemaid", "student", "unknown"]
-    maritals = ["married", "single", "divorced"]
-    educations = ["primary", "secondary", "tertiary", "unknown"]
-    months = ["may", "jun", "jul", "aug", "oct", "nov", "dec", "jan", "feb", "mar", "apr", "sep"]
 
-    data = {
-        "age": np.random.randint(18, 80, sample_size),
-        "job": np.random.choice(jobs, sample_size),
-        "marital": np.random.choice(maritals, sample_size, p=[0.60, 0.28, 0.12]),
-        "education": np.random.choice(educations, sample_size, p=[0.15, 0.51, 0.29, 0.05]),
-        "default": np.random.choice(["no", "yes"], sample_size, p=[0.98, 0.02]),
-        "balance": np.random.normal(loc=1362, scale=3044, size=sample_size).astype(int),
-        "housing": np.random.choice(["no", "yes"], sample_size, p=[0.44, 0.56]),
-        "loan": np.random.choice(["no", "yes"], sample_size, p=[0.84, 0.16]),
-        "contact": np.random.choice(["cellular", "telephone", "unknown"], sample_size, p=[0.65, 0.06, 0.29]),
-        "day": np.random.randint(1, 32, sample_size),
-        "month": np.random.choice(months, sample_size),
-        "duration": np.random.exponential(scale=258, size=sample_size).astype(int) + 5,
-        "campaign": np.random.geometric(p=0.4, size=sample_size),
-        "pdays": np.random.choice([-1, 90, 180, 270, 360], sample_size, p=[0.81, 0.05, 0.05, 0.05, 0.04]),
-        "previous": np.random.choice([0, 1, 2, 3, 4, 5], sample_size, p=[0.81, 0.08, 0.05, 0.03, 0.02, 0.01]),
-        "poutcome": np.random.choice(["unknown", "failure", "other", "success"], sample_size, p=[0.81, 0.11, 0.04, 0.04]),
-        "y": np.random.choice(["no", "yes"], sample_size, p=[0.88, 0.12])
+def norm_col(c):
+    import re
+    return re.sub(r"[^a-z0-9]+", "_", str(c).strip().lower()).strip("_")
+
+ALIASES = {
+    "customer_age":"age","client_age":"age","account_balance":"balance","average_balance":"balance",
+    "contact_duration_seconds":"duration","contact_duration":"duration","campaign_contacts":"campaign",
+    "previous_contacts":"previous","days_since_previous_contact":"pdays","contact_channel":"contact",
+    "marital_status":"marital","housing_loan":"housing","personal_loan":"loan","credit_default":"default",
+    "education_level":"education","previous_campaign_outcome":"poutcome","previous_outcome":"poutcome",
+    "contact_day":"day","contact_month":"month","target":"y","label":"y","response":"y","outcome":"y",
+    "subscribed":"y","subscription":"y","deposit":"y","term_deposit":"y","termdeposit":"y"
+}
+
+
+def canonicalize(df):
+    df = df.copy()
+    rename = {}
+    used = set(df.columns)
+    for c in list(df.columns):
+        n = norm_col(c)
+        target = ALIASES.get(n, n)
+        if target != c and target not in used:
+            rename[c] = target
+            used.add(target)
+    if rename:
+        df = df.rename(columns=rename)
+    return df, rename
+
+
+def target_report(df):
+    if "y" not in df.columns:
+        return {"valid":False,"reason":"Target column 'y' is missing.","counts":{},"positive_rate":0.0}
+    if df.empty:
+        return {"valid":False,"reason":"Dataset contains zero rows.","counts":{},"positive_rate":0.0}
+    if df["y"].isna().any():
+        return {"valid":False,"reason":f"Target column contains {int(df['y'].isna().sum())} missing values.","counts":{},"positive_rate":0.0}
+    s=df["y"].astype(str).str.strip().str.lower().replace({"0":"no","0.0":"no","false":"no","n":"no","1":"yes","1.0":"yes","true":"yes","y":"yes"})
+    classes=set(s.unique())
+    if classes != {"no","yes"}:
+        return {"valid":False,"reason":f"Target must contain yes/no or 0/1. Found: {sorted(classes)[:10]}","counts":s.value_counts().to_dict(),"positive_rate":0.0}
+    counts=s.value_counts().to_dict(); rate=counts.get("yes",0)/len(s)
+    return {"valid":True,"counts":counts,"positive_rate":rate,"imbalanced":rate<.2 or rate>.8,"reason":"Target is valid."}
+
+BANK_ANCHORS={"age","job","balance","housing","loan","contact","duration","campaign"}
+
+def relevance(baseline,candidate):
+    b={norm_col(c) for c in baseline.columns if c!="y"}; c={norm_col(x) for x in candidate.columns if x!="y"}; shared=sorted(b&c); added=sorted(c-b); removed=sorted(b-c)
+    coverage=len(shared)/max(1,len(b)); anchor=len(set(shared)&BANK_ANCHORS)/len(BANK_ANCHORS)
+    related=len(shared)>=5 and coverage>=.30 and anchor>=.50
+    return {"related":related,"shared":shared,"added":added,"removed":removed,"coverage":coverage,"anchor":anchor}
+
+
+def gate_dataset(baseline,candidate):
+    reasons=[]
+    if candidate.empty: reasons.append("CSV is empty.")
+    if len(candidate)<100: reasons.append(f"Insufficient data: {len(candidate):,} rows. Minimum 100 rows.")
+    tr=target_report(candidate)
+    if not tr["valid"]: reasons.append(tr["reason"])
+    rel=relevance(baseline,candidate)
+    if not rel["related"]: reasons.append("Wrong or unrelated bank dataset: insufficient shared bank-domain features.")
+    miss=float(candidate.isna().sum().sum()/max(1,candidate.size))
+    if miss>.60: reasons.append(f"Too much missing data: {miss:.1%}.")
+    constant=[c for c in candidate.columns if candidate[c].nunique(dropna=False)<=1]
+    if len(constant)>=max(4,int(candidate.shape[1]*.60)): reasons.append("Too many constant/non-informative columns.")
+    status="REJECT" if reasons else ("WARNING" if miss>.20 or len(candidate)<1000 else "ACCEPT")
+    return {"status":status,"reasons":reasons or ["Dataset passed defensive checks."],"target":tr,"relevance":rel,"missing_ratio":miss,"constant":constant}
+
+
+def fingerprint(df):
+    payload={"columns":list(df.columns),"dtypes":{c:str(df[c].dtype) for c in df.columns},"rows":len(df)}
+    return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
+
+
+def schema_diff(base,cand):
+    b=set(base.columns); c=set(cand.columns); preserved=sorted(b&c); added=sorted(c-b); removed=sorted(b-c); types={}
+    for col in preserved:
+        if str(base[col].dtype)!=str(cand[col].dtype): types[col]={"baseline":str(base[col].dtype),"candidate":str(cand[col].dtype)}
+    unseen={}
+    for col in preserved:
+        if base[col].dtype==object and cand[col].dtype==object:
+            old=set(base[col].dropna().astype(str).unique()); new=set(cand[col].dropna().astype(str).unique()); diff=sorted(new-old)
+            if diff: unseen[col]=diff[:50]
+    return {"same":not added and not removed and not types,"added":added,"removed":removed,"preserved":preserved,"types":types,"unseen":unseen,"row_delta":len(cand)-len(base),"column_delta":len(cand.columns)-len(base.columns),"fingerprint":fingerprint(cand)}
+
+
+def profile(df):
+    miss=int(df.isna().sum().sum()); dup=int(df.duplicated().sum()); numeric=df.select_dtypes(include="number"); outlier_rows=set(); by={}
+    for col in numeric.columns:
+        s=pd.to_numeric(df[col],errors="coerce"); q1=s.quantile(.25); q3=s.quantile(.75); iqr=q3-q1
+        if pd.isna(iqr) or iqr<=0: continue
+        lo=q1-1.5*iqr; hi=q3+1.5*iqr; mask=((s<lo)|(s>hi)).fillna(False); outlier_rows.update(df.index[mask].tolist()); by[col]={"outliers":int(mask.sum()),"lower":float(lo),"upper":float(hi)}
+    ratio=miss/max(1,df.size); score=max(0,min(100,100-min(50,ratio*70)-min(20,dup/max(1,len(df))*50)))
+    return {"missing":miss,"duplicates":dup,"numeric":len(numeric.columns),"categorical":len(df.columns)-len(numeric.columns),"outliers":len(outlier_rows),"by":by,"score":score}
+
+
+def feature_engineer(df):
+    d=df.copy()
+    if "age" in d: d["age_group"]=pd.cut(pd.to_numeric(d["age"],errors="coerce"),[-np.inf,25,30,40,50,60,np.inf],labels=["<=25","26-30","31-40","41-50","51-60","61+"]).astype(object)
+    if "balance" in d:
+        b=pd.to_numeric(d["balance"],errors="coerce"); d["balance_log"]=np.sign(b)*np.log1p(np.abs(b))
+    if "campaign" in d:
+        c=pd.to_numeric(d["campaign"],errors="coerce"); d["campaign_log"]=np.log1p(np.maximum(c,0)); d["campaign_intensity"]=pd.cut(c,[-np.inf,2,5,np.inf],labels=["low","medium","high"]).astype(object)
+    if "previous" in d: d["previous_contact"]=(pd.to_numeric(d["previous"],errors="coerce")>0).astype(int)
+    if "pdays" in d: d["previously_contacted"]=(pd.to_numeric(d["pdays"],errors="coerce")!=-1).astype(int)
+    if "balance" in d: d["zero_balance"]=(pd.to_numeric(d["balance"],errors="coerce")==0).astype(int)
+    if "housing" in d and "loan" in d: d["loan_burden"]=((d["housing"].astype(str).str.lower()=="yes")&(d["loan"].astype(str).str.lower()=="yes")).astype(int)
+    if "contact" in d: d["contact_unknown"]=(d["contact"].astype(str).str.lower()=="unknown").astype(int)
+    if "poutcome" in d: d["previous_success"]=(d["poutcome"].astype(str).str.lower()=="success").astype(int)
+    return d
+
+
+def preprocessor(X):
+    nums=X.select_dtypes(include="number").columns.tolist(); cats=[c for c in X.columns if c not in nums]; transformers=[]
+    if nums: transformers.append(("num",Pipeline([("impute",SimpleImputer(strategy="median")),("scale",StandardScaler())]),nums))
+    if cats:
+        try: enc=OneHotEncoder(handle_unknown="ignore",sparse_output=False)
+        except TypeError: enc=OneHotEncoder(handle_unknown="ignore",sparse=False)
+        transformers.append(("cat",Pipeline([("impute",SimpleImputer(strategy="most_frequent")),("encode",enc)]),cats))
+    if not transformers: raise ValueError("No usable feature columns remain after removing target.")
+    return ColumnTransformer(transformers,remainder="drop")
+
+
+def model_suite(y):
+    pos=max(1,int((y==1).sum())); neg=max(1,int((y==0).sum())); weight=neg/pos
+    models={
+        "Logistic Regression":LogisticRegression(max_iter=1500,class_weight="balanced",random_state=42),
+        "Random Forest":RandomForestClassifier(n_estimators=180,max_depth=14,min_samples_leaf=2,class_weight="balanced",random_state=42,n_jobs=-1),
+        "Extra Trees":ExtraTreesClassifier(n_estimators=180,min_samples_leaf=2,class_weight="balanced",random_state=42,n_jobs=-1),
+        "Gradient Boosting":GradientBoostingClassifier(n_estimators=140,learning_rate=.06,max_depth=3,random_state=42),
+        "HistGradient Boosting":HistGradientBoostingClassifier(max_iter=160,learning_rate=.07,max_leaf_nodes=31,random_state=42),
+        "AdaBoost":AdaBoostClassifier(estimator=DecisionTreeClassifier(max_depth=2,random_state=42),n_estimators=140,learning_rate=.06,random_state=42),
     }
-    return pd.DataFrame(data)
+    if XGBClassifier is not None: models["XGBoost"]=XGBClassifier(n_estimators=180,max_depth=5,learning_rate=.05,subsample=.85,colsample_bytree=.85,eval_metric="logloss",tree_method="hist",random_state=42,n_jobs=-1,scale_pos_weight=weight)
+    if LGBMClassifier is not None: models["LightGBM"]=LGBMClassifier(n_estimators=180,num_leaves=31,learning_rate=.05,random_state=42,n_jobs=-1,verbosity=-1,class_weight="balanced")
+    if CatBoostClassifier is not None: models["CatBoost"]=CatBoostClassifier(iterations=180,depth=6,learning_rate=.05,verbose=False,random_seed=42,allow_writing_files=False,auto_class_weights="Balanced")
+    return models
 
-# ============================================================
-# 6. SESSION STATE INITIALIZATION
-# ============================================================
 
-if "raw_df" not in st.session_state:
-    st.session_state.raw_df = load_default_bank_dataset()
+def train_models(df, objective):
+    engineered=feature_engineer(df); X=engineered.drop(columns=["y"]); y=engineered["y"].astype(str).str.lower().map({"no":0,"yes":1,"0":0,"1":1})
+    if y.isna().any() or y.nunique()!=2: raise ValueError("Target is not valid binary yes/no data.")
+    Xtr,Xte,ytr,yte=train_test_split(X,y,test_size=.20,random_state=42,stratify=y)
+    models=model_suite(ytr); results={}; failures={}; pipelines={}
+    progress=st.progress(0,"Benchmarking all available algorithms...")
+    for i,(name,clf) in enumerate(models.items(),1):
+        try:
+            pipe=Pipeline([("preprocessor",preprocessor(Xtr)),("model",clf)])
+            started=time.perf_counter(); pipe.fit(Xtr,ytr); elapsed=time.perf_counter()-started; pred=pipe.predict(Xte)
+            if hasattr(pipe,"predict_proba"): prob=pipe.predict_proba(Xte)[:,1]
+            elif hasattr(pipe,"decision_function"):
+                raw=pipe.decision_function(Xte); prob=1/(1+np.exp(-np.clip(raw,-30,30)))
+            else: prob=pred.astype(float)
+            metrics={"accuracy":float(accuracy_score(yte,pred)),"precision":float(precision_score(yte,pred,zero_division=0)),"recall":float(recall_score(yte,pred,zero_division=0)),"f1":float(f1_score(yte,pred,zero_division=0)),"roc_auc":float(roc_auc_score(yte,prob)),"seconds":float(elapsed),"confusion_matrix":confusion_matrix(yte,pred).tolist()}
+            safe="".join(ch.lower() if ch.isalnum() else "_" for ch in name).strip("_"); path=MODELS/f"{safe}.pkl"; joblib.dump(pipe,path); metrics["artifact"]=str(path); results[name]=metrics; pipelines[name]=pipe; log(f"MODEL {name}: accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}, roc_auc={metrics['roc_auc']:.4f}")
+        except Exception as e:
+            failures[name]=str(e); log(f"MODEL FAILED {name}: {e}","WARNING")
+        progress.progress(i/max(1,len(models)),f"Benchmarking {i}/{len(models)}")
+    progress.empty()
+    if not results: raise RuntimeError("All candidate algorithms failed. See logs.")
+    def key(item):
+        m=item[1]
+        if objective=="Accuracy": return (m["accuracy"],m["f1"],m["roc_auc"])
+        if objective=="F1": return (m["f1"],m["accuracy"],m["roc_auc"])
+        if objective=="ROC-AUC": return (m["roc_auc"],m["f1"],m["accuracy"])
+        return ((m["accuracy"]+m["f1"]+m["roc_auc"])/3,m["f1"],m["accuracy"])
+    champ,metrics=max(results.items(),key=key); champ_pipe=pipelines[champ]; champ_path=MODELS/"champion_pipeline.pkl"; joblib.dump(champ_pipe,champ_path)
+    return {"models":results,"failures":failures,"champion":champ,"metrics":metrics,"pipeline":champ_pipe,"features":list(X.columns),"artifact":str(champ_path)}
 
-if "active_dataset_name" not in st.session_state:
-    st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
 
-if "last_source_choice" not in st.session_state:
-    st.session_state.last_source_choice = "Benchmark Production Dataset"
+def governance(result, baseline_metrics=None):
+    m=result["metrics"]; reasons=[]
+    if m["accuracy"]<.60: reasons.append(f"Accuracy {m['accuracy']:.4f} is below 0.6000.")
+    if m["f1"]<.25: reasons.append(f"F1 {m['f1']:.4f} is below 0.2500.")
+    if m["roc_auc"]<.65: reasons.append(f"ROC-AUC {m['roc_auc']:.4f} is below 0.6500.")
+    if baseline_metrics and m["roc_auc"]<float(baseline_metrics.get("roc_auc",0))-.05: reasons.append("ROC-AUC regression exceeded 0.05.")
+    return {"decision":"REJECT" if reasons else "PROMOTE","reasons":reasons or ["Candidate passed production quality gates."]}
 
-if "is_authenticated" not in st.session_state:
-    st.session_state.is_authenticated = False
 
-if "retrain_results" not in st.session_state:
-    st.session_state.retrain_results = None
+def importance(pipe):
+    model=pipe.named_steps["model"]
+    try: names=list(pipe.named_steps["preprocessor"].get_feature_names_out())
+    except Exception: names=[]
+    vals=None
+    if hasattr(model,"feature_importances_"): vals=np.asarray(model.feature_importances_)
+    elif hasattr(model,"coef_"): vals=np.abs(np.asarray(model.coef_)[0])
+    elif hasattr(model,"get_feature_importance"):
+        try: vals=np.asarray(model.get_feature_importance())
+        except Exception: pass
+    if vals is None: return pd.DataFrame(columns=["feature","importance"])
+    if len(names)!=len(vals): names=[f"feature_{i}" for i in range(len(vals))]
+    return pd.DataFrame({"feature":names,"importance":vals}).sort_values("importance",ascending=False).head(20).reset_index(drop=True)
 
-if "active_logs" not in st.session_state:
-    st.session_state.active_logs = [
-        "SYSTEM INITIALIZATION: Enterprise Intelligence Platform Engine booted.",
-        "ENVIRONMENT: Python runtime validated.",
-        "PIPELINE: Active schema baseline loaded."
-    ]
 
-def append_log(msg: str):
-    st.session_state.active_logs.append(f">> {msg}")
+def authenticate(username,password):
+    expected_user=os.getenv("EDIP_ADMIN_USER","admin"); expected_pass=os.getenv("EDIP_ADMIN_PASSWORD","99")
+    return hmac.compare_digest(str(username).strip(),expected_user) and hmac.compare_digest(str(password).strip(),expected_pass)
 
-# ============================================================
-# 7. SIDEBAR CONTROLS & REPOSITORY META
-# ============================================================
 
+# ---------------- SESSION ----------------
+for key,val in {"authenticated":False,"baseline_df":None,"baseline_path":None,"active_df":None,"active_name":"Not loaded","active_kind":"default","gate":None,"schema":None,"training":None,"prediction":None,"logs":[]}.items():
+    st.session_state.setdefault(key,val)
+
+if st.session_state.baseline_df is None:
+    try:
+        base,path=load_default(); base,_=canonicalize(base); st.session_state.baseline_df=base; st.session_state.baseline_path=path; st.session_state.active_df=base.copy(); st.session_state.active_name=Path(path).name; st.session_state.active_kind="default"; st.session_state.gate=gate_dataset(base,base); st.session_state.schema=schema_diff(base,base); log(f"BOOT: loaded default dataset {base.shape}")
+    except Exception as e:
+        st.error(str(e)); log(f"BOOT FAILED: {e}","ERROR"); st.stop()
+
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.markdown("## ⚙️ Enterprise Control Center")
-    st.markdown("Configure operational parameters, data streams, authentication, and governance controls.")
-
-    # --------------------------------------------------------
-    # AUTHENTICATION
-    # --------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### 🔐 Administrator Authentication")
-
-    if not st.session_state.is_authenticated:
-        with st.form("admin_login_form", clear_on_submit=False):
-            username = st.text_input("Username", placeholder="Enter administrator ID")
-            password = st.text_input("Password", type="password", placeholder="Enter password")
-            login_btn = st.form_submit_button("🔓 Authenticate")
-
-            if login_btn:
-                # Safe fallback to prevent lockout if AuthManager is missing
-                is_valid = False
-                if AuthManager is not None:
-                    is_valid = AuthManager.verify_credentials(username, password)
-                else:
-                    is_valid = hmac.compare_digest(username, "admin") and hmac.compare_digest(password, "admin123")
-
-                if is_valid:
-                    st.session_state.is_authenticated = True
-                    append_log("AUTHENTICATION: Administrator authenticated successfully.")
-                    st.success("Authentication successful!")
-                    st.rerun()
-                else:
-                    st.error("Invalid administrator credentials.")
+    st.markdown("### 🔐 Authentication")
+    if not st.session_state.authenticated:
+        with st.form("login"):
+            user=st.text_input("Username")
+            pw=st.text_input("Password",type="password")
+            submitted=st.form_submit_button("Login",width="stretch")
+        if submitted:
+            if authenticate(user,pw): st.session_state.authenticated=True; log("AUTH: administrator authenticated"); st.rerun()
+            else: st.error("Invalid credentials."); log("AUTH: failed login attempt","WARNING")
     else:
-        st.success("🔓 Authenticated as Administrator")
-        if st.button("🚪 Log Out"):
-            st.session_state.is_authenticated = False
-            st.session_state.last_source_choice = "Benchmark Production Dataset"
-            st.session_state.raw_df = load_default_bank_dataset().copy()
-            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
-            st.session_state.retrain_results = None
-            append_log("AUTHENTICATION: Administrator logged out; candidate dataset access revoked and baseline restored.")
-            st.rerun()
-
-    # --------------------------------------------------------
-    # DATA SOURCE
-    # --------------------------------------------------------
+        st.success("Authenticated administrator")
+        if st.button("Logout",width="stretch"): st.session_state.authenticated=False; log("AUTH: administrator logged out"); st.rerun()
     st.markdown("---")
-    st.markdown("### 📥 Ingestion Source")
-
-    if not st.session_state.is_authenticated:
-        source_choice = "Benchmark Production Dataset"
-        if st.session_state.last_source_choice != "Benchmark Production Dataset":
-            st.session_state.last_source_choice = "Benchmark Production Dataset"
-            st.session_state.raw_df = load_default_bank_dataset().copy()
-            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
-            st.session_state.retrain_results = None
-            append_log("SECURITY: Candidate upload access denied; restored production baseline.")
-
-        st.info("🔒 Candidate CSV upload is locked. Authenticate as an administrator to upload a new CSV dataset.")
-    else:
-        source_choice = st.radio(
-            "Select Active Pipeline Data Source:",
-            ["Benchmark Production Dataset", "Upload Candidate Dataset (CSV)"],
-            index=0 if st.session_state.last_source_choice == "Benchmark Production Dataset" else 1
-        )
-
-        if source_choice != st.session_state.last_source_choice:
-            st.session_state.last_source_choice = source_choice
-            if source_choice == "Benchmark Production Dataset":
-                st.session_state.raw_df = load_default_bank_dataset().copy()
-                st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
-                st.session_state.retrain_results = None
-                append_log("DATA SOURCE: Restored original bank-full.csv production baseline.")
-                st.rerun()
-
-        if source_choice == "Upload Candidate Dataset (CSV)":
-            st.success("🔓 Administrator access verified — candidate CSV upload enabled.")
-            uploaded_csv = st.file_uploader("Upload Candidate CSV", type=["csv"], key="active_dataset_upload")
-            if uploaded_csv is not None:
-                try:
-                    sample_head = uploaded_csv.read(4096).decode("utf-8", errors="ignore")
-                    uploaded_csv.seek(0)
-                    delimiter = ";" if sample_head.count(";") > sample_head.count(",") else ","
-                    candidate_df = pd.read_csv(uploaded_csv, sep=delimiter)
-
-                    if candidate_df.empty:
-                        st.error("The uploaded CSV is empty.")
-                    else:
-                        st.session_state.raw_df = candidate_df.copy()
-                        st.session_state.active_dataset_name = uploaded_csv.name
-                        st.session_state.retrain_results = None
-                        append_log(f"NEW INGESTION: {uploaded_csv.name} loaded with shape {candidate_df.shape}")
-                        st.success(f"Active dataset: {uploaded_csv.name} • {candidate_df.shape[0]:,} rows × {candidate_df.shape[1]} columns")
-                except Exception as ex:
-                    st.error(f"Error parsing uploaded file: {ex}")
-
-    st.caption(f"**Active dataset:** {st.session_state.active_dataset_name}")
-
-    if source_choice == "Benchmark Production Dataset":
-        if st.button("🔄 Reset to Default Production Baseline"):
-            st.session_state.raw_df = load_default_bank_dataset().copy()
-            st.session_state.active_dataset_name = "bank-full.csv (Production Baseline)"
-            st.session_state.retrain_results = None
-            append_log("RESET: Reverted dataset to default baseline.")
-            st.rerun()
-
+    st.markdown("### 📥 Main Dataset")
+    st.download_button("⬇️ Download Main Bank CSV",st.session_state.baseline_df.to_csv(index=False).encode(),"bank-full.csv","text/csv",width="stretch")
+    st.caption(f"Baseline: {len(st.session_state.baseline_df):,} rows × {len(st.session_state.baseline_df.columns)} columns")
     st.markdown("---")
-    st.markdown("### 🎯 Supervised Target Configuration")
-
-    available_cols = list(st.session_state.raw_df.columns)
-    target_default_idx = available_cols.index("y") if "y" in available_cols else len(available_cols) - 1
-
-    selected_target = st.selectbox(
-        "Supervised Target Column ('y')",
-        options=available_cols,
-        index=target_default_idx
-    )
-
+    st.markdown("### 📤 Updated Dataset")
+    upload=st.file_uploader("Upload updated CSV",type=["csv"],disabled=not st.session_state.authenticated)
+    if not st.session_state.authenticated: st.caption("Login required for CSV updates.")
+    if upload is not None and st.session_state.authenticated:
+        h=hashlib.sha256(upload.getvalue()).hexdigest()
+        if st.session_state.get("upload_hash")!=h:
+            st.session_state.upload_hash=h
+            try:
+                candidate,_=canonicalize(read_csv_bytes(upload.getvalue())); gate=gate_dataset(st.session_state.baseline_df,candidate); st.session_state.active_df=candidate; st.session_state.active_name=upload.name; st.session_state.active_kind="candidate"; st.session_state.gate=gate; st.session_state.schema=schema_diff(st.session_state.baseline_df,candidate); st.session_state.training=None; st.session_state.prediction=None; log(f"INGESTION: {upload.name} {candidate.shape}; gate={gate['status']}"); st.rerun()
+            except Exception as e:
+                st.error(f"CSV ingestion failed: {e}"); log(f"INGESTION FAILED: {e}","ERROR")
+    if st.button("↩️ Reset to Default Prediction",width="stretch"):
+        st.session_state.active_df=st.session_state.baseline_df.copy(); st.session_state.active_name=Path(st.session_state.baseline_path).name; st.session_state.active_kind="default"; st.session_state.gate=gate_dataset(st.session_state.baseline_df,st.session_state.baseline_df); st.session_state.schema=schema_diff(st.session_state.baseline_df,st.session_state.baseline_df); st.session_state.training=None; st.session_state.prediction=None; st.session_state.pop("upload_hash",None); log("RESET: default dataset restored"); st.rerun()
     st.markdown("---")
-    st.markdown("### 🛡️ Quality Gate Policy Controls")
+    objective=st.selectbox("Champion objective",["Balanced","Accuracy","F1","ROC-AUC"])
+    st.markdown("### 🧾 Runtime Logs")
+    st.markdown(f"<div class='logbox'>{'<br>'.join(st.session_state.logs[-30:]) or 'No logs yet.'}</div>",unsafe_allow_html=True)
 
-    gate_min_roc = st.slider("Minimum Production ROC-AUC", 0.50, 0.95, 0.70, 0.01)
-    gate_min_f1 = st.slider("Minimum Production F1-Score", 0.10, 0.90, 0.35, 0.01)
-    gate_max_drop = st.slider("Max Permissible Degradation", 0.01, 0.20, 0.05, 0.01)
-
-    st.markdown("---")
-    st.markdown("### 📋 Runtime Execution Log")
-    log_text = "\n".join(st.session_state.active_logs[-10:])
-    st.markdown(f'<div class="terminal-logs">{log_text}</div>', unsafe_allow_html=True)
-
-# ============================================================
-# 8. HEADER & ENTERPRISE KPI RIBBON
-# ============================================================
-
-st.markdown('<div class="main-title-text">⚡ Autonomous Enterprise Data & Decision Intelligence Platform</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-subtitle-text">Production Multi-Engine Profiling • Dynamic Feature Engineering • Adaptive Retraining • Automated Governance Quality Gate</div>', unsafe_allow_html=True)
-
-df_active = st.session_state.raw_df
-
-col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
-
-with col_kpi1:
-    st.markdown(f"""
-    <div class="kpi-card">
-        <div class="kpi-title">Total Records</div>
-        <div class="kpi-val">{df_active.shape[0]:,}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_kpi2:
-    st.markdown(f"""
-    <div class="kpi-card">
-        <div class="kpi-title">Total Features</div>
-        <div class="kpi-val">{df_active.shape[1]}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_kpi3:
-    duplicate_rows = int(df_active.duplicated().sum())
-    st.markdown(f"""
-    <div class="kpi-card">
-        <div class="kpi-title">Duplicate Rows</div>
-        <div class="kpi-val">{duplicate_rows:,}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_kpi4:
-    missing_cells = int(df_active.isnull().sum().sum())
-    st.markdown(f"""
-    <div class="kpi-card">
-        <div class="kpi-title">Missing Cells</div>
-        <div class="kpi-val">{missing_cells:,}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_kpi5:
-    mem_footprint_kb = df_active.memory_usage(deep=True).sum() / 1024
-    mem_str = f"{mem_footprint_kb:.1f} KB" if mem_footprint_kb < 1024 else f"{mem_footprint_kb/1024:.2f} MB"
-    st.markdown(f"""
-    <div class="kpi-card">
-        <div class="kpi-title">Memory Footprint</div>
-        <div class="kpi-val">{mem_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-
-# ============================================================
-# 9. MAIN TABBED PLATFORM INTERFACE
-# MOUSE DRAG + TOUCH SWIPE TAB NAVIGATION
-# ============================================================
-
-st.markdown("""
-<style>
-
-/* ============================================================
-   HORIZONTAL TAB STRIP
-   ============================================================ */
-
-.stTabs [data-baseweb="tab-list"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-
-    width: 100% !important;
-    max-width: 100% !important;
-
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-
-    white-space: nowrap !important;
-
-    scrollbar-width: none !important;
-
-    -webkit-overflow-scrolling: touch !important;
-
-    cursor: grab !important;
-
-    user-select: none !important;
+# ---------------- HEADER ----------------
+df=st.session_state.active_df
+# Defensive session-state repair. Every rerun gets a complete gate/schema object.
+# This also repairs state created by older versions of the application.
+try:
+    current_gate = st.session_state.get("gate")
+    if not isinstance(current_gate, dict):
+        raise ValueError("gate state is missing or invalid")
+    required_gate_keys = {"target", "relevance", "reasons", "status", "missing_ratio", "constant"}
+    if not required_gate_keys.issubset(current_gate.keys()):
+        raise ValueError("gate state is incomplete")
+    if not isinstance(current_gate.get("target"), dict):
+        raise ValueError("target gate state is invalid")
+except Exception:
+    try:
+        st.session_state.gate = gate_dataset(st.session_state.baseline_df, df)
+        log("STATE REPAIR: rebuilt complete dataset gate", "WARNING")
+    except Exception as e:
+        st.session_state.gate = {
+            "status": "REJECT",
+            "reasons": [f"Dataset gate could not be rebuilt: {e}"],
+            "target": {"valid": False, "reason": str(e), "counts": {}, "positive_rate": 0.0, "imbalanced": False},
+            "relevance": {"related": False, "shared": [], "added": [], "removed": [], "coverage": 0.0, "anchor": 0.0},
+            "missing_ratio": 1.0,
+            "constant": []
+        }
+gate = st.session_state.gate
+# Backfill optional keys so every section remains crash-safe.
+gate["target"] = gate.get("target") if isinstance(gate.get("target"), dict) else {
+    "valid": False, "reason": "Target validation unavailable.", "counts": {}, "positive_rate": 0.0, "imbalanced": False
 }
-
-.stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
-    display: none !important;
+gate["relevance"] = gate.get("relevance") if isinstance(gate.get("relevance"), dict) else {
+    "related": False, "shared": [], "added": [], "removed": [], "coverage": 0.0, "anchor": 0.0
 }
+gate["reasons"] = gate.get("reasons") or ["Dataset validation could not be completed."]
+gate["status"] = gate.get("status") or "REJECT"
+gate["missing_ratio"] = float(gate.get("missing_ratio", 1.0))
+gate["constant"] = gate.get("constant") or []
+
+try:
+    schema = st.session_state.schema
+    if not isinstance(schema, dict) or not {"same", "added", "removed", "preserved", "types", "unseen", "row_delta", "column_delta", "fingerprint"}.issubset(schema.keys()):
+        schema = schema_diff(st.session_state.baseline_df, df)
+except Exception:
+    schema = schema_diff(st.session_state.baseline_df, df)
+st.session_state.schema = schema
+q=profile(df)
+st.markdown("<div class='main-title'>Enterprise Data Intelligence Platform</div>",unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Adaptive data intelligence • schema drift • multi-model learning • governance • real-time inference</div>",unsafe_allow_html=True)
+if gate["status"]=="REJECT": st.markdown(f"<div class='bad'><b>🔴 NEW CSV ACTIVE — PREDICTION LOCKED</b><br>{st.session_state.active_name}<br>Reports below use this CSV only.<br><br>"+"<br>".join(gate["reasons"])+"</div>",unsafe_allow_html=True)
+elif st.session_state.active_kind=="candidate": st.markdown(f"<div class='warn'><b>🟡 UPDATED CSV ACTIVE</b><br>{st.session_state.active_name}<br>All seven reports now use the updated CSV.</div>",unsafe_allow_html=True)
+else: st.markdown(f"<div class='good'><b>🟢 DEFAULT BASELINE ACTIVE</b><br>{st.session_state.active_name}</div>",unsafe_allow_html=True)
+
+k=st.columns(6)
+for c,label,val in zip(k,["Rows","Columns","Missing Cells","Duplicates","Quality","Anomalies"],[f"{len(df):,}",len(df.columns),q["missing"],q["duplicates"],f"{q['score']:.1f}/100",q["outliers"]]):
+    c.markdown(f"<div class='card'><div class='small'>{label}</div><div class='big'>{val}</div></div>",unsafe_allow_html=True)
+
+tabs=st.tabs(["📂 1. Ingestion & Pre-Flight","📊 2. Deep Data Profiling","🔍 3. Anomaly Intelligence","🧬 4. Schema Drift & Registry","⚙️ 5. Feature Engineering Studio","🚀 6. Adaptive Retraining & Governance","🔮 7. Real-Time Inference & Explainability"])
 
-.stTabs [data-baseweb="tab-list"]:active {
-    cursor: grabbing !important;
-}
-
-/* Individual tabs */
-.stTabs [data-baseweb="tab"] {
-    flex: 0 0 auto !important;
-    flex-shrink: 0 !important;
-
-    min-width: max-content !important;
-
-    white-space: nowrap !important;
-
-    cursor: pointer !important;
-
-    padding: 12px 18px !important;
-}
-
-/* Prevent text selection while dragging */
-.stTabs [data-baseweb="tab"] * {
-    user-select: none !important;
-}
-
-/* Mobile */
-@media (max-width: 768px) {
-
-    .stTabs [data-baseweb="tab-list"] {
-        overflow-x: auto !important;
-        touch-action: pan-x !important;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        padding: 11px 14px !important;
-        font-size: 13px !important;
-    }
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# MOUSE DRAG / TOUCH DRAG
-# ============================================================
-
-st.markdown("""
-<script>
-
-(function() {
-
-    function enableTabDragging() {
-
-        const tabLists = window.parent.document.querySelectorAll(
-            '.stTabs [data-baseweb="tab-list"]'
-        );
-
-        tabLists.forEach(function(slider) {
-
-            if (slider.dataset.dragEnabled === "true") {
-                return;
-            }
-
-            slider.dataset.dragEnabled = "true";
-
-            let isDown = false;
-            let startX = 0;
-            let scrollLeft = 0;
-            let moved = false;
-
-            /* ============================
-               MOUSE DOWN
-               ============================ */
-
-            slider.addEventListener("mousedown", function(e) {
-
-                isDown = true;
-                moved = false;
-
-                slider.style.cursor = "grabbing";
-
-                startX = e.pageX - slider.offsetLeft;
-                scrollLeft = slider.scrollLeft;
-
-            });
-
-            /* ============================
-               MOUSE LEAVE
-               ============================ */
-
-            slider.addEventListener("mouseleave", function() {
-
-                isDown = false;
-
-                slider.style.cursor = "grab";
-
-            });
-
-            /* ============================
-               MOUSE UP
-               ============================ */
-
-            slider.addEventListener("mouseup", function() {
-
-                isDown = false;
-
-                slider.style.cursor = "grab";
-
-            });
-
-            /* ============================
-               MOUSE MOVE
-               ============================ */
-
-            slider.addEventListener("mousemove", function(e) {
-
-                if (!isDown) {
-                    return;
-                }
-
-                e.preventDefault();
-
-                const x = e.pageX - slider.offsetLeft;
-
-                const walk = (x - startX) * 1.5;
-
-                if (Math.abs(walk) > 5) {
-                    moved = true;
-                }
-
-                slider.scrollLeft = scrollLeft - walk;
-
-            });
-
-            /* ============================
-               TOUCH START
-               ============================ */
-
-            slider.addEventListener("touchstart", function(e) {
-
-                startX = e.touches[0].pageX - slider.offsetLeft;
-
-                scrollLeft = slider.scrollLeft;
-
-            }, { passive: true });
-
-            /* ============================
-               TOUCH MOVE
-               ============================ */
-
-            slider.addEventListener("touchmove", function(e) {
-
-                const x = e.touches[0].pageX - slider.offsetLeft;
-
-                const walk = (x - startX) * 1.5;
-
-                slider.scrollLeft = scrollLeft - walk;
-
-            }, { passive: true });
-
-        });
-
-    }
-
-    /* Run after Streamlit renders */
-    setTimeout(enableTabDragging, 500);
-
-    /* Re-check because Streamlit rerenders elements */
-    setInterval(enableTabDragging, 1500);
-
-})();
-
-</script>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# TABS
-# ============================================================
-
-tabs = st.tabs([
-    "📂 1. Ingestion & Pre-Flight",
-    "📊 2. Deep Data Profiling",
-    "🔍 3. Anomaly Intelligence",
-    "🧬 4. Schema Drift & Registry",
-    "⚙️ 5. Feature Engineering Studio",
-    "🚀 6. Adaptive Retraining & Governance",
-    "🔮 7. Real-Time Inference & Explainability"
-])
-
-
-# ============================================================
-# TAB 1: INGESTION & PRE-FLIGHT VALIDATION
-# ============================================================
 with tabs[0]:
-    st.markdown('<div class="section-ribbon">📂 MODULE 1: INGESTION PIPELINE & TARGET INTEGRITY ENGINE</div>', unsafe_allow_html=True)
-    st.markdown("Raw data exploration, structural typing, delimiter normalization, and strict target distribution audits.")
-    
-    col_t1_left, col_t1_right = st.columns([3, 2])
-    
-    with col_t1_left:
-        st.markdown("#### 📄 Dataset Sample (Top 10 Rows)")
-        st.dataframe(df_active.head(10))
-        
-        st.markdown("#### 📄 Dataset Tail (Last 5 Rows)")
-        st.dataframe(df_active.tail(5))
+    st.markdown('<div class="ribbon">📂 1. Ingestion & Pre-Flight</div>',unsafe_allow_html=True)
+    t=gate.get("target", {}) or {}
+    c=st.columns(4)
+    c[0].metric("Gate", gate.get("status", "REJECT"))
+    c[1].metric("Rows", f"{len(df):,}")
+    c[2].metric("Columns", len(df.columns))
+    c[3].metric("YES Rate", f"{float(t.get('positive_rate', 0)):.2%}" if t.get("valid", False) else "N/A")
+    st.dataframe(df.head(20),width="stretch")
+    st.dataframe(pd.DataFrame([{"column":x,"dtype":str(df[x].dtype),"missing":int(df[x].isna().sum()),"missing_%":round(df[x].isna().mean()*100,2),"unique":int(df[x].nunique(dropna=True))} for x in df.columns]),width="stretch")
+    if not t.get("valid"):
+        st.error(t.get("reason", "Target validation failed."))
 
-    with col_t1_right:
-        st.markdown("#### 📋 Column Schema Definitions")
-        schema_summary = []
-        for col in df_active.columns:
-            schema_summary.append({
-                "Feature Name": col,
-                "Data Type": str(df_active[col].dtype),
-                "Non-Null Count": int(df_active[col].notnull().sum()),
-                "Unique Levels": int(df_active[col].nunique())
-            })
-        st.dataframe(pd.DataFrame(schema_summary), height=420)
-
-    st.markdown("---")
-    st.markdown("### 🎯 Supervised Target Protection Audit")
-    
-    if TargetIntegrityEngine:
-        target_validator = TargetIntegrityEngine(target_column=selected_target)
-        try:
-            target_report = target_validator.validate_target(df_active)
-            st.success(f"✅ Target integrity check PASSED: Target column '{selected_target}' is valid and fully normalized.")
-            
-            c_val1, c_val2, c_val3, c_val4 = st.columns(4)
-            c_val1.metric("Integrity Status", target_report.get("status", "VALID"))
-            c_val2.metric("Total Observations", f"{target_report.get('total_samples', 0):,}")
-            c_val3.metric("Positive Class Rate", f"{target_report.get('positive_class_percentage', 0.0):.2f}%")
-            c_val4.metric("Imbalance Flag", "⚠️ Imbalanced" if target_report.get("is_imbalanced", False) else "✅ Balanced")
-            
-            st.markdown("#### Target Class Distribution Histogram")
-            st.bar_chart(df_active[selected_target].value_counts())
-            
-        except Exception as err:
-            st.error(f"❌ Target Integrity Violation: {err}")
-    else:
-        st.info("Target Integrity Engine available in production mode.")
-
-# ============================================================
-# TAB 2: DEEP MULTI-ENGINE PROFILING
-# ============================================================
 with tabs[1]:
-    st.markdown('<div class="section-ribbon">📊 MODULE 2: MULTI-ENGINE ENTERPRISE DATA PROFILING</div>', unsafe_allow_html=True)
-    st.markdown("Exhaustive analysis across automated data quality engines, statistical distribution analytics, and correlation matrices.")
-    
-    subtab_qual, subtab_stat, subtab_rel, subtab_sem = st.tabs([
-        "🛡️ Quality Audit & Scoring",
-        "📈 Statistical Intelligence",
-        "🔗 Relationship & Correlations",
-        "🏷️ Semantic & Sentinel Flags"
-    ])
-    
-    with subtab_qual:
-        st.markdown("### 🛡️ Enterprise Data Quality Assessment Engine")
-        
-        if DataQualityEngine:
-            q_engine = DataQualityEngine()
-            quality_output = q_engine.analyze(df_active)
-            
-            col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-            score = quality_output.get("quality_score", 0.0)
-            
-            col_q1.metric("Overall Quality Index", f"{score} / 100")
-            col_q2.metric("Missing Value Cells", quality_output.get("missing_values", 0))
-            col_q3.metric("Duplicate Record Count", quality_output.get("duplicate_rows", 0))
-            col_q4.metric("Placeholder / Unknowns", quality_output.get("unknown_values", 0))
-            
-            st.progress(min(1.0, max(0.0, score / 100.0)))
-            
-            if score >= 90:
-                st.success("🟢 EXCELLENT DATA QUALITY: Dataset is clean, complete, and ready for high-fidelity training.")
-            elif score >= 70:
-                st.warning("🟡 ACCEPTABLE QUALITY: Moderate levels of missingness, duplicates, or unknown placeholders detected.")
-            else:
-                st.error("🔴 POOR QUALITY: Significant data defects detected. Automated imputation & deduplication recommended.")
-        else:
-            st.dataframe(df_active.isnull().sum())
+    st.markdown('<div class="ribbon">📊 2. Deep Data Profiling</div>',unsafe_allow_html=True)
+    st.dataframe(df.describe(include="all").transpose().reset_index().rename(columns={"index":"column"}),width="stretch")
+    nums=df.select_dtypes(include="number")
+    if not nums.empty:
+        st.markdown("### Numeric Distributions"); selected=st.selectbox("Feature",nums.columns,key="profile_feature"); st.line_chart(nums[selected].reset_index(drop=True).head(5000))
+        st.markdown("### Correlation Matrix"); st.dataframe(nums.corr().round(3),width="stretch")
 
-    with subtab_stat:
-        st.markdown("### 📈 Numerical Feature Distribution & Outlier Metrics")
-        
-        if StatisticalAnalyzer:
-            stat_engine = StatisticalAnalyzer()
-            stat_results = stat_engine.analyze(df_active)
-            
-            if stat_results:
-                stat_df = pd.DataFrame.from_dict(stat_results, orient="index")
-                st.dataframe(stat_df.style.highlight_max(axis=0, color="#dbeafe"))
-            else:
-                st.info("No numerical attributes detected for statistical profiling.")
-        else:
-            st.dataframe(df_active.describe().T)
-
-    with subtab_rel:
-        st.markdown("### 🔗 Inter-Feature Correlation & Target Relationship Matrix")
-        
-        num_cols_only = df_active.select_dtypes(include=np.number)
-        
-        if num_cols_only.shape[1] >= 2:
-            col_rel_left, col_rel_right = st.columns([1, 1])
-            
-            with col_rel_left:
-                st.markdown("#### 📐 Pairwise Numeric Correlation Heatmap Table")
-                corr_matrix = num_cols_only.corr()
-                st.dataframe(corr_matrix.style.background_gradient(cmap="coolwarm", vmin=-1.0, vmax=1.0))
-            
-            with col_rel_right:
-                st.markdown("#### 🔍 Filtered High Correlation Pairs (|r| ≥ 0.30)")
-                if RelationshipAnalyzer:
-                    rel_engine = RelationshipAnalyzer()
-                    rel_data = rel_engine.analyze(df_active, target=selected_target)
-                    corrs = rel_data.get("numeric_correlations", [])
-                    if corrs:
-                        st.dataframe(pd.DataFrame(corrs))
-                    else:
-                        st.info("No pairwise numerical features exceed the |r| ≥ 0.30 correlation threshold.")
-                else:
-                    st.info("Relationship analyzer active.")
-
-    with subtab_sem:
-        st.markdown("### 🏷️ Semantic Flags & Sentinel Detection Engine")
-        st.markdown("Detects domain-specific placeholder flags, negative numerical sentinels (e.g. `pdays=-1`), and special tokens.")
-        
-        if SemanticAnalyzer:
-            sem_engine = SemanticAnalyzer()
-            sem_data = sem_engine.analyze(df_active)
-            
-            records = []
-            for feat, payload in sem_data.items():
-                placeholders = payload.get("placeholder_values", {})
-                sentinels = payload.get("sentinel_values", {})
-                if placeholders or sentinels:
-                    records.append({
-                        "Feature": feat,
-                        "Text Placeholders": json.dumps(placeholders) if placeholders else "None",
-                        "Numeric Sentinels": json.dumps(sentinels) if sentinels else "None"
-                    })
-            
-            if records:
-                st.dataframe(pd.DataFrame(records))
-            else:
-                st.success("No hidden sentinel values or placeholder markers identified.")
-        else:
-            st.info("Semantic analyzer module available.")
-
-# ============================================================
-# TAB 3: ANOMALY INTELLIGENCE
-# ============================================================
 with tabs[2]:
-    st.markdown('<div class="section-ribbon">🔍 MODULE 3: ANOMALY INTELLIGENCE & OUTLIER DETECTION</div>', unsafe_allow_html=True)
-    st.markdown("Multi-method anomaly detection leveraging Interquartile Range (IQR) bounds and Z-score distributions.")
-    
-    numeric_features = df_active.select_dtypes(include=np.number).columns.tolist()
-    
-    if numeric_features:
-        col_anom_sel, col_anom_view = st.columns([1, 3])
-        
-        with col_anom_sel:
-            chosen_anom_col = st.selectbox("Inspect Numeric Attribute:", numeric_features, index=0)
-            threshold_multiplier = st.slider("IQR Multiplier Threshold", 1.0, 3.0, 1.5, 0.1)
-        
-        series_data = df_active[chosen_anom_col].dropna()
-        q25 = float(series_data.quantile(0.25))
-        q75 = float(series_data.quantile(0.75))
-        iqr_val = q75 - q25
-        lower_limit = q25 - (threshold_multiplier * iqr_val)
-        upper_limit = q75 + (threshold_multiplier * iqr_val)
-        
-        outlier_rows = df_active[(df_active[chosen_anom_col] < lower_limit) | (df_active[chosen_anom_col] > upper_limit)]
-        
-        with col_anom_view:
-            c_an1, c_an2, c_an3, c_an4 = st.columns(4)
-            c_an1.metric("Lower Bound", f"{lower_limit:.2f}")
-            c_an2.metric("Upper Bound", f"{upper_limit:.2f}")
-            c_an3.metric("Outlier Records", f"{len(outlier_rows):,}")
-            c_an4.metric("Contamination Ratio", f"{(len(outlier_rows)/len(df_active))*100:.2f}%")
-        
-        st.markdown(f"#### 🔎 Sample Anomalous Records Detected for `{chosen_anom_col}`")
-        if not outlier_rows.empty:
-            st.dataframe(outlier_rows.head(20))
-        else:
-            st.success(f"No statistical anomalies detected for feature '{chosen_anom_col}' within selected bounds.")
-    else:
-        st.info("No numerical features available for anomaly profiling.")
+    st.markdown('<div class="ribbon">🔍 3. Anomaly Intelligence</div>',unsafe_allow_html=True)
+    st.write(f"Detected **{q['outliers']:,}** anomalous numeric records using IQR rules.")
+    if q["by"]:
+        at=pd.DataFrame([{"feature":x,**v} for x,v in q["by"].items()]).sort_values("outliers",ascending=False); st.dataframe(at,width="stretch")
+        feat=st.selectbox("Inspect feature",at.feature.tolist(),key="anom_feature"); b=q["by"][feat]; s=pd.to_numeric(df[feat],errors="coerce"); mask=((s<b["lower"])|(s>b["upper"])).fillna(False); st.dataframe(df.loc[mask].head(100),width="stretch")
+    else: st.success("No numeric IQR anomalies detected.")
 
-# ============================================================
-# TAB 4: SCHEMA DRIFT & REGISTRY
-# ============================================================
 with tabs[3]:
-    st.markdown('<div class="section-ribbon">🧬 MODULE 4: SCHEMA PROVENANCE & RETRAINING DRIFT GUARD</div>', unsafe_allow_html=True)
-    st.markdown("Compares candidate dataset schemas against the registered baseline version. Detects structural mutations, data type changes, and unseen categorical levels.")
-    
-    if SchemaRegistry and SchemaComparator:
-        reg_engine = SchemaRegistry()
-        comp_engine = SchemaComparator(registry=reg_engine)
-        
-        diff_payload = comp_engine.compare_against_active(df_active, target_column=selected_target)
-        
-        if diff_payload.get("is_initial_schema"):
-            st.info("ℹ️ No active production schema currently registered. Register this dataset to initialize the baseline.")
-            if st.button("📝 Register Current Schema as Production Baseline (v1.0)"):
-                if not st.session_state.is_authenticated:
-                    st.warning("🔐 Administrator authentication is required to register a production baseline.")
-                    st.stop()
-                reg_engine.register_schema(df_active, version_tag="v1.0", target_column=selected_target, notes="Initial Production Schema Baseline")
-                append_log("SCHEMA REGISTRY: Registered baseline schema v1.0")
-                st.success("Registered v1.0 baseline schema successfully!")
-                st.rerun()
-        else:
-            st.markdown("### 🔬 Schema Comparison & Mutation Analysis")
-            is_mutated = diff_payload.get("has_mutations", False)
-            
-            if is_mutated:
-                st.warning("⚠️ SCHEMA MUTATIONS DETECTED: Incoming dataset features differ from the active baseline.")
-            else:
-                st.success("✅ SCHEMA ALIGNED: Candidate dataset perfectly matches the active production baseline signature.")
-            
-            c_sc1, c_sc2, c_sc3 = st.columns(3)
-            c_sc1.metric("Added Features", len(diff_payload.get("added_features", [])))
-            c_sc2.metric("Deleted Features", len(diff_payload.get("deleted_features", [])))
-            c_sc3.metric("Preserved Features", len(diff_payload.get("preserved_features", [])))
-            
-            col_sc_left, col_sc_right = st.columns(2)
-            with col_sc_left:
-                st.markdown("#### ➕ Added & Deleted Attributes")
-                st.json({
-                    "added_features": diff_payload.get("added_features", []),
-                    "deleted_features": diff_payload.get("deleted_features", [])
-                })
-            
-            with col_sc_right:
-                st.markdown("#### 🔄 Type Mutations & Novel Categories")
-                st.json({
-                    "type_mutations": diff_payload.get("type_mutations", {}),
-                    "unseen_categories": diff_payload.get("unseen_categories", {})
-                })
-    else:
-        st.info("Schema registry and comparator modules operating in standard mode.")
+    st.markdown('<div class="ribbon">🧬 4. Schema Drift & Registry</div>',unsafe_allow_html=True)
+    c=st.columns(5); c[0].metric("Schema", "MATCH" if schema["same"] else "DRIFT"); c[1].metric("Added",len(schema["added"])); c[2].metric("Removed",len(schema["removed"])); c[3].metric("Preserved",len(schema["preserved"])); c[4].metric("Row Delta",f"{schema['row_delta']:+,}")
+    a,b=st.columns(2)
+    with a:
+        st.markdown("**Added columns**")
+        st.write(schema.get("added") or "None")
+        st.markdown("**Removed columns**")
+        st.write(schema.get("removed") or "None")
+    with b:
+        st.markdown("**Type mutations**")
+        st.json(schema.get("types") or {"type_mutations": []})
+        st.markdown("**Unseen categories**")
+        st.json(schema.get("unseen") or {"unseen_categories": []})
+    st.code(json.dumps({"dataset":st.session_state.active_name,"fingerprint":schema["fingerprint"],"timestamp":datetime.now().isoformat(timespec="seconds")},indent=2))
 
-# ============================================================
-# TAB 5: FEATURE ENGINEERING STUDIO
-# ============================================================
 with tabs[4]:
-    st.markdown('<div class="section-ribbon">⚙️ MODULE 5: FEATURE ENGINEERING STUDIO</div>', unsafe_allow_html=True)
-    st.markdown("Transform raw inputs into predictive domain signals: campaign indicators, interaction features, and balance bins.")
-    
-    col_fe_ctrl, col_fe_view = st.columns([1, 2])
-    
-    with col_fe_ctrl:
-        st.markdown("#### 🛠️ Available Transformations")
-        st.checkbox("Generate `pdays_contacted` binary flag", value=True)
-        st.checkbox("Create `balance_to_age` ratio interaction", value=True)
-        st.checkbox("Encode `campaign_intensity` log transform", value=True)
-        
-        if st.button("⚡ Apply Feature Engineering Pipeline"):
-            if not st.session_state.is_authenticated:
-                st.warning("🔐 Administrator authentication is required to modify the active production dataset.")
-            elif FeatureEngineeringEngine:
-                fe_engine = FeatureEngineeringEngine()
-                try:
-                    df_engineered = fe_engine.create_features(df_active)
-                    st.session_state.raw_df = df_engineered
-                    append_log("FEATURE ENGINEERING: Applied domain feature engineering pipeline.")
-                    st.success("Engineered features created successfully!")
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"Feature engineering failed: {ex}")
-            else:
-                st.info("Feature engineering module loaded.")
+    st.markdown('<div class="ribbon">⚙️ 5. Feature Engineering Studio</div>',unsafe_allow_html=True)
+    eng=feature_engineer(df); generated=[x for x in eng.columns if x not in df.columns]; st.metric("Generated Features",len(generated)); st.dataframe(pd.DataFrame({"engineered_feature":generated}),width="stretch"); st.dataframe(eng.head(20),width="stretch")
 
-    with col_fe_view:
-        st.markdown("#### 📋 Current Feature Column Manifest")
-        current_cols = pd.DataFrame({
-            "Index": range(1, len(df_active.columns) + 1),
-            "Column Name": df_active.columns,
-            "Type": [str(t) for t in df_active.dtypes]
-        })
-        st.dataframe(current_cols, height=350)
-
-# ============================================================
-# TAB 6: ADAPTIVE RETRAINING & GOVERNANCE GATE
-# ============================================================
 with tabs[5]:
-    st.markdown('<div class="section-ribbon">🚀 MODULE 6: ADAPTIVE RETRAINING PIPELINE & PRODUCTION GOVERNANCE GATE</div>', unsafe_allow_html=True)
-    st.markdown("Executes dynamic preprocessing, handles class imbalance via cost-sensitive learning, trains multiple model families, and evaluates against automated promotion gates.")
-    
-    st.markdown("### ⚡ Execute Model Training Orchestration")
-    
-    if st.button("🚀 Trigger Full Adaptive Retraining Cycle", type="primary"):
-        if not st.session_state.is_authenticated:
-            st.warning("🔐 Administrator authentication is required to execute adaptive retraining.")
-        else:
-            with st.spinner("Building dynamic feature transformers, balancing class weights, and evaluating candidate classifiers..."):
-                if AdaptiveModelTrainer:
-                    trainer = AdaptiveModelTrainer()
-                    try:
-                        results = trainer.train_and_evaluate(df_active)
-                        st.session_state.retrain_results = results
-                        append_log("TRAINING ENGINE: Completed multi-algorithm retraining cycle.")
-                        st.success("🎉 Adaptive Retraining Pipeline Completed Successfully!")
-                    except Exception as e:
-                        st.error(f"Retraining execution failed: {e}")
-                        st.code(traceback.format_exc())
+    st.markdown('<div class="ribbon">🚀 6. Adaptive Retraining & Governance</div>',unsafe_allow_html=True)
+    if not st.session_state.authenticated: st.warning("🔐 Administrator authentication is required for retraining.")
+    elif gate["status"]=="REJECT": st.error("🔴 Retraining locked because the active CSV failed the defensive data gate.")
+    elif st.button("🚀 Run Full Adaptive Model Benchmark",type="primary",width="stretch"):
+        try:
+            with st.spinner("Training and comparing all available algorithms..."):
+                result=train_models(df,objective)
+                # For a candidate dataset, compare against currently stored baseline only when available.
+                base_metrics=None
+                registry_file=REGISTRY/"model_registry.json"
+                if registry_file.exists():
+                    try: base_metrics=json.loads(registry_file.read_text(encoding="utf-8")).get("active_metrics")
+                    except Exception: base_metrics=None
+                gov=governance(result,base_metrics); result["governance"]=gov; st.session_state.training=result
+                record={"timestamp":datetime.now().isoformat(timespec="seconds"),"dataset":st.session_state.active_name,"fingerprint":fingerprint(df),"champion":result["champion"],"metrics":result["metrics"],"governance":gov,"models":result["models"]}
+                if gov["decision"]=="PROMOTE":
+                    (REGISTRY/"model_registry.json").write_text(json.dumps({"active_model":result["champion"],"active_metrics":result["metrics"],"active_dataset":st.session_state.active_name,"history":[record]},indent=2,default=str),encoding="utf-8")
+                    st.session_state.prediction_allowed=True
+                    st.session_state.champion=result["pipeline"]
                 else:
-                    st.error("AdaptiveModelTrainer module not loaded.")
+                    st.session_state.prediction_allowed=False; st.session_state.champion=None
+                log(f"TRAINING END: champion={result['champion']} decision={gov['decision']}"); st.rerun()
+        except Exception as e:
+            st.error(f"Training failed safely: {e}"); st.code(traceback.format_exc()); log(f"TRAINING FAILED: {e}","ERROR")
+    if st.session_state.training:
+        r=st.session_state.training; rows=[]
+        for name,m in r["models"].items(): rows.append({"Algorithm":name,"Accuracy":m["accuracy"],"Precision":m["precision"],"Recall":m["recall"],"F1":m["f1"],"ROC-AUC":m["roc_auc"],"Seconds":m["seconds"],"Status":"⭐ CHAMPION" if name==r["champion"] else "Candidate"})
+        table=pd.DataFrame(rows).sort_values(["Accuracy","F1","ROC-AUC"],ascending=False); st.dataframe(table,width="stretch"); st.bar_chart(table.set_index("Algorithm")[["Accuracy","F1","ROC-AUC"]]);
+        if r["governance"]["decision"]=="PROMOTE": st.success(f"🟢 PROMOTED: {r['champion']}")
+        else: st.error("🔴 REJECTED — inference remains locked."); [st.warning(x) for x in r["governance"]["reasons"]]
+        if r["failures"]: st.json(r["failures"])
 
-    if st.session_state.retrain_results:
-        retrain_payload = st.session_state.retrain_results
-        all_models = retrain_payload.get("all_candidates", {})
-        champ_name = retrain_payload.get("best_candidate_name")
-        champ_metrics = retrain_payload.get("best_candidate_metrics", {})
-        
-        st.markdown("---")
-        st.markdown("### 🏆 Candidate Algorithms Cross-Evaluation Matrix")
-        
-        matrix_rows = []
-        for m_name, m_metrics in all_models.items():
-            matrix_rows.append({
-                "Model Architecture": m_name.replace("_", " ").title(),
-                "Accuracy": f"{m_metrics.get('accuracy', 0.0):.4f}",
-                "Precision": f"{m_metrics.get('precision', 0.0):.4f}",
-                "Recall": f"{m_metrics.get('recall', 0.0):.4f}",
-                "F1-Score": f"{m_metrics.get('f1', 0.0):.4f}",
-                "ROC-AUC": f"{m_metrics.get('roc_auc', 0.0):.4f}",
-                "Status": "⭐ CHAMPION" if m_name == champ_name else "Candidate"
-            })
-        
-        st.dataframe(pd.DataFrame(matrix_rows))
-        
-        st.markdown("---")
-        st.markdown("### ⚖️ Production Quality Gate Evaluation")
-        
-        if QualityGateEngine:
-            gate_checker = QualityGateEngine(
-                min_roc_auc=gate_min_roc,
-                min_f1_score=gate_min_f1,
-                max_performance_drop=gate_max_drop
-            )
-            decision_data = gate_checker.evaluate_candidate(champ_name, champ_metrics)
-            
-            gate_decision = decision_data.get("decision")
-            reasons_list = decision_data.get("reasons", [])
-            
-            if gate_decision == "PROMOTE":
-                st.markdown(f"""
-                <div class="gate-promoted-card">
-                    <h3>🟢 DECISION: PROMOTED TO PRODUCTION CHAMPION</h3>
-                    <p><b>Candidate Model:</b> {champ_name.replace('_', ' ').title()}</p>
-                    <p>{reasons_list[0] if reasons_list else 'Passed all constraints.'}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                reason_items = "".join([f"<li>{r}</li>" for r in reasons_list])
-                st.markdown(f"""
-                <div class="gate-rejected-card">
-                    <h3>🔴 DECISION: REJECTED (ROLLBACK TO ACTIVE BASELINE)</h3>
-                    <p><b>Candidate Model:</b> {champ_name.replace('_', ' ').title()}</p>
-                    <ul>{reason_items}</ul>
-                </div>
-                """, unsafe_allow_html=True)
-
-# ============================================================
-# TAB 7: REAL-TIME INFERENCE & DECISION EXPLAINABILITY
-# ============================================================
 with tabs[6]:
-    st.markdown('<div class="section-ribbon">🔮 MODULE 7: REAL-TIME INFERENCE & DECISION EXPLAINABILITY</div>', unsafe_allow_html=True)
-    st.markdown("Interactive inference engine for generating customer term-deposit subscription probabilities with explainability factors.")
-    
-    col_inf1, col_inf2, col_inf3 = st.columns(3)
-    
-    with col_inf1:
-        st.markdown("#### 👤 Demographics & Profile")
-        in_age = st.slider("Client Age", 18, 95, 38)
-        in_job = st.selectbox("Occupation", ["management", "technician", "entrepreneur", "blue-collar", "retired", "admin.", "services", "self-employed", "unemployed", "student", "housemaid"])
-        in_marital = st.selectbox("Marital Status", ["married", "single", "divorced"])
-        in_education = st.selectbox("Education Tier", ["primary", "secondary", "tertiary", "unknown"])
-        in_balance = st.number_input("Yearly Average Balance (€)", -2000, 150000, 2500)
-
-    with col_inf2:
-        st.markdown("#### 💳 Financial Products & Credit")
-        in_housing = st.selectbox("Has Housing Loan?", ["no", "yes"], index=1)
-        in_loan = st.selectbox("Has Personal Loan?", ["no", "yes"], index=0)
-        in_default = st.selectbox("Has Credit in Default?", ["no", "yes"], index=0)
-        in_contact = st.selectbox("Contact Communication Type", ["cellular", "telephone", "unknown"])
-        in_duration = st.slider("Last Contact Call Duration (sec)", 0, 3000, 320)
-
-    with col_inf3:
-        st.markdown("#### 📅 Campaign Context & Timing")
-        in_campaign = st.slider("Contacts in Current Campaign", 1, 30, 2)
-        in_pdays = st.number_input("Days Passed from Prior Campaign (pdays)", -1, 999, -1)
-        in_previous = st.slider("Prior Campaign Contacts", 0, 25, 0)
-        in_poutcome = st.selectbox("Previous Campaign Outcome", ["unknown", "failure", "other", "success"])
-        in_month = st.selectbox("Last Contact Month", ["may", "jun", "jul", "aug", "oct", "nov", "dec", "jan", "feb", "mar", "apr", "sep"])
-        in_day = st.slider("Last Contact Day of Month", 1, 31, 15)
-
-    st.markdown("---")
-    if st.button("🔮 Compute Real-Time Subscription Probability", type="primary"):
-        base_probability = 0.11
-        if in_duration > 350:
-            base_probability += 0.38
-        elif in_duration > 180:
-            base_probability += 0.18
-            
-        if in_poutcome == "success":
-            base_probability += 0.42
-        if in_housing == "no":
-            base_probability += 0.08
-        if in_balance > 5000:
-            base_probability += 0.07
-        if in_age > 60:
-            base_probability += 0.12
-        if in_loan == "yes":
-            base_probability -= 0.06
-            
-        confidence_score = min(0.97, max(0.03, base_probability))
-        
-        col_res1, col_res2 = st.columns([1, 2])
-        with col_res1:
-            is_sub = confidence_score >= 0.5
-            st.metric("Predicted Decision", "✅ SUBSCRIBE (YES)" if is_sub else "❌ NO SUBSCRIPTION (NO)")
-            st.metric("Model Confidence", f"{confidence_score*100:.2f}%")
-            
-        with col_res2:
-            st.markdown("#### Conversion Probability Gauge")
-            st.progress(confidence_score)
-            if confidence_score >= 0.5:
-                st.success("🌟 HIGH-VALUE PROSPECT: Customer displays high conversion propensity. Priority outreach recommended.")
-            else:
-                st.info("ℹ️ LOW CONVERSION PROBABILITY: Standard nurture or digital campaign recommended.")
-
-# ============================================================
-# 10. SYSTEM FOOTER
-# ============================================================
+    st.markdown('<div class="ribbon">🔮 7. Real-Time Inference & Explainability</div>',unsafe_allow_html=True)
+    if gate["status"]=="REJECT":
+        st.error("🚫 INSUFFICIENT / WRONG / UNRELATED DATA — prediction unavailable. Reset to Default Prediction or upload a valid related bank CSV.")
+    elif not st.session_state.get("prediction_allowed") or st.session_state.get("champion") is None:
+        st.warning("🔒 Prediction is locked. Authenticate, train the current dataset, and promote a valid champion model.")
+    else:
+        pipe=st.session_state.champion; source=df.drop(columns=["y"],errors="ignore"); fields=list(source.columns); values={}; cols=st.columns(3)
+        for i,col in enumerate(fields):
+            with cols[i%3]:
+                s=source[col]
+                if pd.api.types.is_numeric_dtype(s):
+                    n=pd.to_numeric(s,errors="coerce").dropna(); default=float(n.median()) if len(n) else 0.0; lo=float(n.min()) if len(n) else default-1; hi=float(n.max()) if len(n) else default+1; hi=max(hi,lo+1); default=float(np.clip(default,lo,hi)); values[col]=st.number_input(col.replace("_"," ").title(),min_value=lo,max_value=hi,value=default,key=f"inf_{col}")
+                else:
+                    opts=s.dropna().astype(str).value_counts().head(100).index.tolist() or ["unknown"]; values[col]=st.selectbox(col.replace("_"," ").title(),opts,key=f"inf_{col}")
+        if st.button("🚀 Analyze Customer",type="primary",width="stretch"):
+            try:
+                customer_input=pd.DataFrame([values]); customer=feature_engineer(customer_input); expected=st.session_state.training["features"] if st.session_state.training else list(source.columns); 
+                for c in expected:
+                    if c not in customer: customer[c]=np.nan
+                customer=customer[expected]; pred=int(pipe.predict(customer)[0]); prob=float(pipe.predict_proba(customer)[0,1]) if hasattr(pipe,"predict_proba") else float(pred); decision="YES" if pred==1 else "NO"; risk="LOW" if prob>=.75 else "MEDIUM" if prob>=.50 else "HIGH"; priority="HIGH" if prob>=.75 else "MEDIUM" if prob>=.50 else "LOW"; action="Prioritize customer for high-intent campaign follow-up." if prob>=.75 else "Include customer in standard marketing follow-up." if prob>=.50 else "Do not prioritize; retain for lower-frequency campaign treatment."; st.session_state.prediction={"decision":decision,"prob":prob,"risk":risk,"priority":priority,"action":action,"customer":customer,"profile":values.copy()}; log(f"INFERENCE: decision={decision}, probability={prob:.4f}"); st.rerun()
+            except Exception as e:
+                st.error("Prediction failed safely because the current schema is incompatible with the promoted model."); log(f"INFERENCE FAILED: {e}","ERROR")
+        if st.session_state.prediction:
+            p=st.session_state.prediction; c=st.columns(4)
+            for box,label,val in zip(c,["Prediction","Probability","Risk","Priority"],[p["decision"],f"{p['prob']:.2%}",p["risk"],p["priority"]]): box.markdown(f"<div class='card'><div class='small'>{label}</div><div class='big'>{val}</div></div>",unsafe_allow_html=True)
+            st.progress(p["prob"],text=f"YES probability: {p['prob']:.2%}"); st.info(p["action"]); st.markdown("### 👤 Customer Profile")
+            profile=p.get("profile",{})
+            labels={"age":"Age","job":"Job","marital":"Marital Status","education":"Education","balance":"Balance","housing":"Housing Loan","loan":"Personal Loan","default":"Default","contact":"Contact Method","month":"Campaign Month","day":"Day","campaign":"Campaign Contacts","pdays":"Days Since Previous Contact","previous":"Previous Contacts","poutcome":"Previous Outcome","duration":"Call Duration"}
+            groups=[("Personal",["age","job","marital","education"]),("Financial",["balance","housing","loan","default"]),("Campaign",["contact","month","day","campaign","pdays","previous","poutcome","duration"])]
+            for group,keys in groups:
+                st.markdown(f"**{group}**")
+                present=[k for k in keys if k in profile]
+                if present:
+                    pc=st.columns(min(4,max(1,len(present))))
+                    for idx,k in enumerate(present):
+                        v=profile.get(k)
+                        if pd.isna(v) if not isinstance(v,(list,dict)) else False: v="—"
+                        if isinstance(v,float) and np.isnan(v): v="—"
+                        if k in {"housing","loan","default"} and str(v).lower() in {"yes","no"}: v=str(v).title()
+                        if k=="balance" and isinstance(v,(int,float,np.integer,np.floating)) and not pd.isna(v): v=f"{v:,.0f}"
+                        pc[idx%len(pc)].markdown(f"<div class='card'><div class='small'>{labels.get(k,k.replace('_',' ').title())}</div><div style='font-size:1.05rem;font-weight:700;color:#f8fafc;margin-top:6px'>{v}</div></div>",unsafe_allow_html=True)
+            st.markdown("### 🤖 Model Information")
+            r=st.session_state.training; c=st.columns(4); c[0].metric("Model",r["champion"]); c[1].metric("Accuracy",f"{r['metrics']['accuracy']:.4f}"); c[2].metric("F1",f"{r['metrics']['f1']:.4f}"); c[3].metric("ROC-AUC",f"{r['metrics']['roc_auc']:.4f}")
+            imp=importance(pipe); st.markdown("### 📊 Top Model Features"); st.dataframe(imp,width="stretch"); st.bar_chart(imp.set_index("feature")["importance"] if not imp.empty else pd.Series(dtype=float)); st.markdown("### 📋 Final Decision Summary"); st.dataframe(pd.DataFrame({"Component":["Prediction","Probability","Risk","Priority","Action"],"Result":[p["decision"],f"{p['prob']:.2%}",p["risk"],p["priority"],p["action"]]}),width="stretch")
 
 st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 10px;'>"
-    "⚡ Autonomous Enterprise Data & Decision Intelligence Platform • Production Build • Author: Pratim Mistry"
-    "</div>",
-    unsafe_allow_html=True
-)
+st.caption("⚡ Enterprise Data & Decision Intelligence Platform • Adaptive Production Build")
