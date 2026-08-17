@@ -420,12 +420,23 @@ def train_models(df, objective):
     return {"models":results,"failures":failures,"champion":champ,"metrics":metrics,"pipeline":champ_pipe,"features":list(X.columns),"artifact":str(champ_path)}
 
 
-def governance(result, baseline_metrics=None):
+def governance(result, baseline_metrics=None, same_context=False):
+    """Quality-gate a freshly trained champion model.
+
+    Absolute floors (accuracy/F1/ROC-AUC) always apply.
+    The "regression vs. previous champion" check is ONLY applied when the
+    previous promoted model came from the SAME dataset fingerprint AND the
+    SAME champion objective. Comparing a model optimized for F1 against a
+    previously-promoted model that was optimized for ROC-AUC is an
+    apples-to-oranges comparison and used to cause spurious REJECTs whenever
+    the user switched the "Champion objective" dropdown between runs.
+    """
     m=result["metrics"]; reasons=[]
     if m["accuracy"]<.60: reasons.append(f"Accuracy {m['accuracy']:.4f} is below 0.6000.")
     if m["f1"]<.25: reasons.append(f"F1 {m['f1']:.4f} is below 0.2500.")
     if m["roc_auc"]<.65: reasons.append(f"ROC-AUC {m['roc_auc']:.4f} is below 0.6500.")
-    if baseline_metrics and m["roc_auc"]<float(baseline_metrics.get("roc_auc",0))-.05: reasons.append("ROC-AUC regression exceeded 0.05.")
+    if same_context and baseline_metrics and m["roc_auc"]<float(baseline_metrics.get("roc_auc",0))-.05:
+        reasons.append("ROC-AUC regression exceeded 0.05 versus the previously promoted model (same dataset & objective).")
     return {"decision":"REJECT" if reasons else "PROMOTE","reasons":reasons or ["Candidate passed production quality gates."]}
 
 
@@ -613,16 +624,30 @@ with tabs[5]:
         try:
             with st.spinner("Training and comparing all available algorithms..."):
                 result=train_models(df,objective)
-                # For a candidate dataset, compare against currently stored baseline only when available.
+                # Only compare against a previously promoted model when it came
+                # from the SAME dataset fingerprint AND the SAME champion
+                # objective. Comparing across different objectives (e.g. a run
+                # optimized for F1 vs. a stored ROC-AUC-optimized champion) is
+                # an apples-to-oranges comparison and previously caused valid
+                # models to be rejected just for switching the objective
+                # dropdown between runs.
                 base_metrics=None
+                same_context=False
                 registry_file=REGISTRY/"model_registry.json"
                 if registry_file.exists():
-                    try: base_metrics=json.loads(registry_file.read_text(encoding="utf-8")).get("active_metrics")
-                    except Exception: base_metrics=None
-                gov=governance(result,base_metrics); result["governance"]=gov; st.session_state.training=result
+                    try:
+                        prior=json.loads(registry_file.read_text(encoding="utf-8"))
+                        base_metrics=prior.get("active_metrics")
+                        same_context=(
+                            prior.get("active_fingerprint")==fingerprint(df)
+                            and prior.get("active_objective")==objective
+                        )
+                    except Exception:
+                        base_metrics=None
+                gov=governance(result,base_metrics,same_context); result["governance"]=gov; st.session_state.training=result
                 record={"timestamp":datetime.now().isoformat(timespec="seconds"),"dataset":st.session_state.active_name,"fingerprint":fingerprint(df),"champion":result["champion"],"metrics":result["metrics"],"governance":gov,"models":result["models"]}
                 if gov["decision"]=="PROMOTE":
-                    (REGISTRY/"model_registry.json").write_text(json.dumps({"active_model":result["champion"],"active_metrics":result["metrics"],"active_dataset":st.session_state.active_name,"history":[record]},indent=2,default=str),encoding="utf-8")
+                    (REGISTRY/"model_registry.json").write_text(json.dumps({"active_model":result["champion"],"active_metrics":result["metrics"],"active_dataset":st.session_state.active_name,"active_fingerprint":fingerprint(df),"active_objective":objective,"history":[record]},indent=2,default=str),encoding="utf-8")
                     st.session_state.prediction_allowed=True
                     st.session_state.champion=result["pipeline"]
                 else:
@@ -644,6 +669,11 @@ with tabs[6]:
         st.error("🚫 INSUFFICIENT / WRONG / UNRELATED DATA — prediction unavailable. Reset to Default Prediction or upload a valid related bank CSV.")
     elif not st.session_state.get("prediction_allowed") or st.session_state.get("champion") is None:
         st.warning("🔒 Prediction is locked. Authenticate, train the current dataset, and promote a valid champion model.")
+        if st.session_state.get("training") and st.session_state.training.get("governance", {}).get("decision") == "REJECT":
+            st.error("The last training run was rejected for the following reason(s):")
+            for reason in st.session_state.training["governance"]["reasons"]:
+                st.write(f"- {reason}")
+            st.info("Go to Section 6, review the reasons above, and re-run the benchmark once resolved (e.g. pick a different objective, or check dataset quality).")
     else:
         pipe=st.session_state.champion; source=df.drop(columns=["y"],errors="ignore"); fields=list(source.columns); values={}; cols=st.columns(3)
         for i,col in enumerate(fields):
